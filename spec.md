@@ -128,6 +128,22 @@ A hidden matching engine invites one obvious question: *how do I know the price 
 
 This is what turns FTSO from decoration into enforcement, and it is the direct answer to the "is the integration superficial?" judging criterion.
 
+### Coston2 constants
+
+Verified on-chain 2026-07-31.
+
+| Thing | Value |
+|---|---|
+| Chain ID | `114` |
+| RPC | `https://coston2-api.flare.network/ext/C/rpc` |
+| Explorer | `https://coston2-explorer.flare.network` |
+| FXRP (base), symbol `FTestXRP` | `0x0b6a3645c240605887a5532109323a3e12273dc7` |
+| USDT0 (quote), symbol `USD₮0` | `0xc1a5b41512496b80903d1f32d6dea3a73212e71f` |
+| FtsoV2 proxy | `0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d` |
+| XRP/USD feed ID | `0x015852502f55534400000000000000000000000000` |
+
+> **Both tokens use 6 decimals, not 18.** The FTSO feed also returns 6 decimals. Never hardcode `1e18` anywhere in this codebase. Define decimals as named constants and convert explicitly at every boundary, because a silent 12-orders-of-magnitude error in a clearing price will look like a working demo right up until settlement moves absurd amounts.
+
 ---
 
 ## 4. Data shapes
