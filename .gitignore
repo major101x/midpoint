@@ -1,4 +1,4 @@
-# secrets — never commit
+# secrets: never commit
 .secrets/
 .env
 .env.*
