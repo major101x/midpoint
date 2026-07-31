@@ -276,7 +276,7 @@ Aug 14 is deadline day and is reserved as pure slack. Do not plan work into it.
 | Q1 (signing) has no clean answer | Medium | Fallback (b) is already specified and works |
 | Clearing algorithm edge cases eat days | Medium | Unit-test off-chain in plain TypeScript, no chain in the loop |
 | Frontend consumes the endgame | Medium | It is Days 10-11, after the milestone. A CLI demo is an acceptable downgrade. |
-| Real FXRP unobtainable on testnet | Medium | Mock ERC-20, disclosed |
+| Real FXRP unobtainable on testnet | Resolved | Faucet dispenses real FXRP and USDT0, see §7 Q2 |
 | Solo burnout across 15 days | High | Day 13 is deliberate buffer. Submit on Day 15, not Day 16. |
 
 ---
