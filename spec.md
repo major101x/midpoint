@@ -172,7 +172,7 @@ Timing side channels are also real here: order arrival times are public even whe
 
 ### In
 
-- One pair: FXRP / test quote token
+- One pair: FXRP/USDT0, both real Coston2 testnet tokens
 - Deposit, submit encrypted order, close batch, settle, withdraw
 - Uniform-price clearing, roughly 10-20 orders per batch
 - FTSO band enforcement
@@ -203,9 +203,14 @@ The scaffold's `NodeClient` wraps only `/decrypt`. Two paths:
 
 Both are acceptable. (a) is cleaner; (b) is guaranteed to work. **Do not start `Settlement.sol` before this is answered.**
 
-**Q2: Is testnet FXRP available on Coston2, or do we mint a mock ERC-20?**
+**Q2: RESOLVED 2026-07-31. Real testnet FXRP is available, no mock needed.**
 
-Real FXRP is worth a meaningful amount of credibility. If FAssets testnet minting takes more than a day, use a mock and say so. Do not lose three days to this.
+The official faucet (`https://faucet.flare.network/coston2`) dispenses 100 C2FLR, 10 USDT0 and 10 FXRP per address per 24 hours. The pair is therefore **FXRP/USDT0**, both real testnet tokens.
+
+Two consequences:
+
+- Bounty 1 claim strengthens from "trades an ERC-20 we minted" to "trades actual FAssets FXRP".
+- The demo needs several distinct trader addresses to make a batch auction meaningful. Generate them and fund each from the same faucet. 10 FXRP per address is ample when order sizes are fractional.
 
 **Q3: Does `getRandomTeeIds` return a stable machine across a batch?**
 
