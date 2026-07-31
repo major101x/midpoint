@@ -1,0 +1,16 @@
+# secrets — never commit
+.secrets/
+.env
+.env.*
+!.env.example
+config/extension.env
+
+# build
+node_modules/
+out/
+cache/
+broadcast/
+*.tar
+
+# tooling
+.DS_Store
