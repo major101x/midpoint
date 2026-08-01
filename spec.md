@@ -105,7 +105,7 @@ Rejects orders from addresses with zero balance (cheap spam guard that leaks not
 **Sealed FCE (TypeScript)**: An HTTP server satisfying `docs/extension-contract.md`. Handlers registered against `(SEALED, SUBMIT_ORDER)` and `(SEALED, RUN_MATCH)`. On submit: decrypt via `NodeClient`, validate, insert into the in-memory book for the current batch. On match: clear, produce the settlement payload, sign it, return it. `GET /state` exposes only non-sensitive aggregates, namely batch number, order count, and last clearing price. **Never the book.**
 
 **`Settlement.sol`**: Accepts `(batchId, fills[], clearingPrice, signature)`. Rejects unless:
-1. `ecrecover(hash(payload))` is a TEE machine registered for this extension;
+1. `ecrecover(payloadHash, signature)` equals the current `settlementSigner`, the address of the key held inside the enclave (see §7 Q1);
 2. `batchId` is the next unsettled batch (replay protection);
 3. `clearingPrice` is within the FTSO band (below);
 4. fills net to zero, meaning total bought equals total sold.
@@ -141,6 +141,8 @@ Verified on-chain 2026-07-31.
 | USDT0 (quote), symbol `USD₮0` | `0xc1a5b41512496b80903d1f32d6dea3a73212e71f` |
 | FtsoV2 proxy | `0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d` |
 | XRP/USD feed ID | `0x015852502f55534400000000000000000000000000` |
+
+> **TEE keys are ephemeral.** The TEE's identity key is regenerated when the container restarts. Observed directly: the registered machine id went from `0xFAcCDbDB...8073` to `0xCEDCF76d...60C7` across a restart. Nothing in `Settlement.sol` may hardcode a TEE address or signer. Store `settlementSigner` in mutable storage with an owner-only setter, and re-point it after any enclave restart. The same applies to the extension's in-memory order book: a restart loses it, so a batch spanning a restart must be voidable rather than settleable.
 
 > **Both tokens use 6 decimals, not 18.** The FTSO feed also returns 6 decimals. Never hardcode `1e18` anywhere in this codebase. Define decimals as named constants and convert explicitly at every boundary, because a silent 12-orders-of-magnitude error in a clearing price will look like a working demo right up until settlement moves absurd amounts.
 
@@ -210,14 +212,25 @@ Scoping down is the correct move solo, and stating the cut lines clearly scores 
 
 ## 7. Open questions to resolve first
 
-**Q1: How does the TEE sign the settlement payload? (blocking, resolve Day 3)**
+**Q1: RESOLVED 2026-08-01. Use an in-enclave settlement key, the `fce-sign` pattern.**
 
-The scaffold's `NodeClient` wraps only `/decrypt`. Two paths:
+Path (a), reusing the TEE's own result signature, was investigated and rejected. Findings:
 
-- **(a)** tee-node exposes a signing capability on the sign port. Check the `fce-sign` reference repo and the tee-node source.
-- **(b)** Fallback: derive a deterministic keypair inside the enclave, publish the public key at registration, and pin it in `Settlement.sol`. Sound because attestation already covers the code that derives the key.
+- `GET /action/result/<id>` does return `{result, signature, proxySignature}`, and the TEE's identity key does equal its registered machine id (verified: the address derived from the `/info` public key matched the registry exactly).
+- The signature is over `keccak256(abi.encode(bytes32 prefix, uint256 chainId, bytes32 dataHash))` with `prefix = bytes32("TEE_ACTION_RESULT")` and `dataHash = ActionResult.Hash()`. That construction was reproduced from source but does **not** verify. A control test using the proxy's known private key against `proxySignature` also failed, so the published construction is incomplete in some way not visible in the source read.
+- `VerificationFacet` on Coston2 exposes only attestation and availability-check functions. There is no on-chain "verify this action result" helper to lean on.
 
-Both are acceptable. (a) is cleaner; (b) is guaranteed to work. **Do not start `Settlement.sol` before this is answered.**
+Reverse-engineering this further is not a good use of hackathon days, and it would leave settlement resting on an undocumented detail.
+
+**Decision:** follow the officially documented `fce-sign` pattern (`https://dev.flare.network/fcc/guides/sign-extension`), which has a complete TypeScript reference implementation:
+
+1. The extension holds a secp256k1 settlement key in enclave memory.
+2. It signs with `signECDSA`: `keccak256` of the payload, then secp256k1, returning 65 bytes `r || s || v` with `v = recovery + 27`. Directly compatible with Solidity `ecrecover`.
+3. `Settlement.sol` verifies `ecrecover(payloadHash, sig) == settlementSigner`.
+
+**Key provenance.** Prefer generating the keypair inside the enclave on first init and returning only its address, so no party ever holds the private half. The alternative documented by `fce-sign` (encrypt a key to the TEE public key and load it via `KEY/UPDATE`) is simpler but weaker: whoever generated the key can also forge settlements. If the loaded-key route is used to save time, say so plainly in the threat model rather than implying otherwise.
+
+**Consequence: the signer address must be settable, never hardcoded.** See the ephemeral-key note in §3.
 
 **Q2: RESOLVED 2026-07-31. Real testnet FXRP is available, no mock needed.**
 

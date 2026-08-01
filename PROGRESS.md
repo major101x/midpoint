@@ -54,6 +54,48 @@ Three containers running: `redis`, `ext-proxy`, `extension-tee`.
 - `pre-build.sh` refuses to re-run while `config/extension.env` exists. Do not pass `--force`; it mints a new extension ID and can trigger `MachineManager.TooMany()`.
 - Flare's own tooling warns that in simulated mode the code hash is self-reported rather than proven by hardware. Say this plainly in the README and video, per spec §8.
 
+---
+
+## Day 3, 2026-08-01: Q1 spike resolved
+
+**Q1 RESOLVED.** Settlement will use an in-enclave secp256k1 key signing with the
+documented `fce-sign` pattern, verified on-chain with plain `ecrecover`. Full
+reasoning in `spec.md` §7 Q1.
+
+### What was investigated and rejected
+
+Reusing the TEE's own result signature looked ideal and was chased down properly:
+
+- `GET /action/result/<id>` returns `{result, signature, proxySignature}`, both 65 bytes.
+- The TEE identity key **is** the registered machine id. Deriving the address from the `/info` public key (`keccak256(x || y)` last 20 bytes) produced `0xcedcf76d...60c7`, matching the registry exactly.
+- The signing construction was read from source: `keccak256(abi.encode(bytes32 prefix, uint256 chainId, bytes32 dataHash))`, `prefix = bytes32("TEE_ACTION_RESULT")`, `dataHash = ActionResult.Hash()`, where `ActionResult.Hash() = keccak256(keccak256(data) || id || keccak256(submissionTag) || status)`.
+- Reproducing it did not verify. A **control test** using the proxy's known private key against `proxySignature` also failed to recover, proving the method was wrong rather than the TEE key.
+- Both ABI tuple encodings (inline and offset-prefixed), both recovery ids, several chain ids, and several candidate dataHash values were brute-forced with no match.
+- `VerificationFacet` (`0x78203332236cF39A0079746385F33060aCC95778`) exposes only `requestTeeAttestation`, `confirmAvailability`, `getCosigners`, and settings. No on-chain action-result verification helper exists.
+
+Stopped here deliberately. Settlement resting on an undocumented detail would be worse than a documented pattern, and the days are better spent on the product.
+
+### Critical finding: TEE keys are ephemeral
+
+The registered TEE machine id changed across a container restart:
+
+```
+0xFAcCDbDB46763190251501e9AeD3108928238073   (07-31)
+0xCEDCF76d90c5Fe875cBC05B1191bF160ad7C60C7   (08-01, after restart)
+```
+
+`Settlement.sol` must therefore store the signer in mutable storage with a setter,
+never a constant. The in-memory order book has the same property: a batch that
+spans an enclave restart must be voidable, not settleable.
+
+### Operational findings
+
+1. **Re-registration is needed after reward epochs advance.** After a day, the proxy had moved from policy 5883 to 5888 and instructions were silently never picked up: no error, just no result in storage. Fix is to re-run `post-build.sh`.
+2. **`post-build.sh` needed patching to re-run.** It called `register-tee` with the default `-command rap`. Per `docs/deployment-steps.md`, re-runs need `-command rRap`, because `r` skips itself once registered and the availability challenge is then never issued. Patched locally in `scripts/post-build.sh`.
+3. **Foundry auto-loads `.env` from the working directory.** Our `.env` sets `CHAIN=coston2`, which is not a valid Foundry chain name, so every `cast` call from the scaffold directory fails with a confusing `invalid value 'coston2' for '--chain'`. Run `cast` from a neutral directory.
+4. **Debugging trap:** `%x` on `hexutil.Bytes` invokes `String()` first, printing the hex of the ASCII of the hex string. Signature bytes look double-encoded when they are fine. Cost about twenty minutes; check `len()` before believing the print.
+
 ### Next
 
-Day 3 spike: resolve Q1 (TEE signing path) before any work on `Settlement.sol`.
+Day 4: `Vault.sol` plus deposit and withdraw tests. Pure Solidity, no chain in the
+loop, so it is unblocked regardless of enclave state.
