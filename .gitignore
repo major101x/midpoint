@@ -14,3 +14,6 @@ broadcast/
 
 # tooling
 .DS_Store
+
+# vendored Flare scaffold, tracked separately until we fork it
+fce-extension-scaffold/

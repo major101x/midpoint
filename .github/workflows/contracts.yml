@@ -1,0 +1,37 @@
+name: contracts
+
+permissions: {}
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: forge fmt, build, test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - run: forge --version
+
+      - run: forge fmt --check
+
+      - run: forge build --sizes
+
+      # Fork tests are excluded here: they need a live Coston2 RPC and a faucet
+      # funded address. Run them locally with
+      #   forge test --match-contract VaultForkTest --fork-url coston2
+      - run: forge test --no-match-contract Fork -vvv
