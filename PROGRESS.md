@@ -95,7 +95,46 @@ spans an enclave restart must be voidable, not settleable.
 3. **Foundry auto-loads `.env` from the working directory.** Our `.env` sets `CHAIN=coston2`, which is not a valid Foundry chain name, so every `cast` call from the scaffold directory fails with a confusing `invalid value 'coston2' for '--chain'`. Run `cast` from a neutral directory.
 4. **Debugging trap:** `%x` on `hexutil.Bytes` invokes `String()` first, printing the hex of the ASCII of the hex string. Signature bytes look double-encoded when they are fine. Cost about twenty minutes; check `len()` before believing the print.
 
+---
+
+## Day 4, 2026-08-01: Vault
+
+**`forge test` green: 22 passing, 19 offline and 3 forked against real Coston2 tokens.**
+
+Foundry project lives in `contracts/`, deliberately separate from the vendored
+scaffold so the core contracts test with no Docker, no TEE and no network.
+`forge-std` is a submodule, so clone with `--recursive`.
+
+### What Vault does and why
+
+Traders pre-fund an internal balance and draw orders against it. Per-order escrow
+was rejected: the escrowed amount *is* the order size, published on chain, which
+would make the order encryption decorative. This is the design decision the whole
+privacy claim rests on.
+
+The consequence is that the chain cannot know whether a trader's balance covers
+their encrypted order, so it cannot lock the right amount at submission time
+without revealing it. Sealed freezes withdrawals for the duration of a settling
+batch instead. Deposits stay open while frozen, since blocking inflows would be
+gratuitous.
+
+`move(from, to, isBase, amount)` is the only mutation available to settlement.
+Keeping it a primitive leaves Vault ignorant of auction mechanics.
+
+### Hazards handled
+
+- **Non-standard tokens.** `SafeTransfer` uses low-level calls that accept either empty return data or a value decoding to `true`. A strictly typed `IERC20.transfer` would revert on the USDT lineage even when the transfer succeeded. Proven against real USDT0 in a fork test, not just a mock.
+- **Fee-on-transfer.** Deposits credit the balance delta actually received, not the amount requested, so the vault can never credit more than it holds. Fuzzed for solvency.
+- **Reentrancy.** Checks-effects-interactions plus a guard.
+- **Decimals.** Balances are raw token units, so nothing assumes 18. Test constants spell out `1e6` so a future change breaks loudly.
+
+### Environment notes
+
+1. `forge init` created a nested `.git` inside `contracts/`, which silently made the first commit contain nothing but `.gitmodules`. Removed it and re-added as a proper submodule (mode `160000`).
+2. `forge init` also wrote `.github/workflows/` inside `contracts/`, where GitHub ignores it. Moved to the repo root and adjusted to run from `contracts/` with `submodules: recursive`. Fork tests are excluded in CI since they need a live RPC and a funded address.
+
 ### Next
 
-Day 4: `Vault.sol` plus deposit and withdraw tests. Pure Solidity, no chain in the
-loop, so it is unblocked regardless of enclave state.
+Day 5: `OrderBook.sol`, the extension's on-chain entry point, wiring both
+instructions. Remember from day 3: pin the TEE id for a batch's lifetime rather
+than re-drawing it per instruction.
