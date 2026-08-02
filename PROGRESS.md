@@ -133,8 +133,75 @@ Keeping it a primitive leaves Vault ignorant of auction mechanics.
 1. `forge init` created a nested `.git` inside `contracts/`, which silently made the first commit contain nothing but `.gitmodules`. Removed it and re-added as a proper submodule (mode `160000`).
 2. `forge init` also wrote `.github/workflows/` inside `contracts/`, where GitHub ignores it. Moved to the repo root and adjusted to run from `contracts/` with `submodules: recursive`. Fork tests are excluded in CI since they need a live RPC and a funded address.
 
+---
+
+## Day 5, 2026-08-02: OrderBook live on Coston2, SEALED reaching the enclave
+
+**Acceptance criterion met.** A real order submitted on chain reached the TEE
+with the right op-type and the handler accepted it:
+
+```
+main queue: routing action with OPType, OPCommand: SEALED, SUBMIT_ORDER
+action 0xab3d...: opType=SEALED opCommand=SUBMIT_ORDER status=1
+handler response: {"batchId":"1","accepted":true,"ordersInBatch":1}
+```
+
+### Deployed on Coston2
+
+| Thing | Address |
+|---|---|
+| Vault | `0xa49fbba899ab03f7ba0694989738a4c222a5e4d9` |
+| OrderBook | `0xb4c2eaB99883280eCb886dB38a8710Ffe215698b` |
+| Extension ID | `0x10160` (65888) |
+| TEE machine | `0x2Fd46E88149D0BF66D66a886bd3A93F857B55A86` |
+
+Superseded: the day 1-2 hello-world extension `0x10150` and its instruction
+sender `0x9DB9...aF05` are dead. Do not reference them.
+
+### Pinning verified against the real registry
+
+On chain after one order: `orderCount = 1`, `batchTee =
+0x2fd46e88149d0bf66d66a886bd3a93f857b55a86`, which is exactly the registered TEE
+machine. The property was also mutation-tested off chain: disabling pinning makes
+`test_pinning_allOrdersInBatchGoToSameTee` fail.
+
+Writing the mock sharpened *why* pinning matters. `getRandomTeeIds` is `view`, so
+it compiles to a STATICCALL and cannot mutate storage, which means Flare's
+randomness must come from block state: stable within a block, free to change
+between blocks. A batch spans many blocks, so a per-order draw would scatter one
+batch across enclaves and clear against a partial book. That is a silent wrong
+answer, the worst failure mode available.
+
+### Security property added beyond the spec
+
+The spec put `trader` inside the encrypted payload, which is self-declared.
+Nothing stopped a bystander copying a ciphertext out of a public transaction and
+resubmitting it. `OrderBook` now sends `abi.encode(msg.sender, batchId,
+ciphertext)`, so the enclave can reject a blob whose inner trader does not match
+the actual sender, in this batch or a later one. The equality check itself lands
+with decryption on day 6.
+
+### Architecture decision: deployment lives in our repo
+
+The scaffold's `register-extension` accepts any address as the instructions
+sender, so `Vault` and `OrderBook` are deployed by `contracts/script/Deploy.s.sol`
+and never copied into the vendored tree. Our contracts cannot drift from the
+tested versions in `contracts/src`, and the scaffold is left to do only what it
+is good at: running the enclave.
+
+### Test counts
+
+- Solidity: 44 passing (19 Vault, 25 OrderBook), plus 3 forked.
+- Extension TypeScript: 50 passing, including two confidentiality tests asserting
+  that `GET /state` never contains a ciphertext or trader address. `/state` is
+  reachable from outside the enclave, so that is a first-class property.
+
+### Notes
+
+- Instruction fee is `1000000` wei, taken from `tools/pkg/utils/instructions.go`. Sending zero reverts.
+- Registering a new instructions sender mints a **new** extension id, which then needs `config/extension.env` updated, the container restarted, and `post-build.sh` re-run. The TEE machine address changes again each time.
+
 ### Next
 
-Day 5: `OrderBook.sol`, the extension's on-chain entry point, wiring both
-instructions. Remember from day 3: pin the TEE id for a batch's lifetime rather
-than re-drawing it per instruction.
+Day 6: decrypt inside the enclave. Needs the ECIES format the sign port's
+`/decrypt` expects to be determined, then the inner-trader equality check.
