@@ -1,13 +1,16 @@
 /**
  * ★ Configuration: version and operation identifiers.
  *
- * Mirrors go/internal/config/config.go. The op-type and op-command strings MUST
- * match the bytes32 constants in contracts/InstructionSender.sol exactly, or
- * actions fall through to "unsupported op type".
+ * These strings MUST match the bytes32 constants in the Sealed OrderBook
+ * contract exactly, or actions fall through to "unsupported op type" (501).
+ *
+ *   OrderBook.OP_TYPE_SEALED          = bytes32("SEALED")
+ *   OrderBook.OP_COMMAND_SUBMIT_ORDER = bytes32("SUBMIT_ORDER")
+ *   OrderBook.OP_COMMAND_RUN_MATCH    = bytes32("RUN_MATCH")
  */
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
-export const OP_TYPE_GREETING = "GREETING";
-export const OP_COMMAND_SAY_HELLO = "SAY_HELLO";
-export const OP_COMMAND_SAY_GOODBYE = "SAY_GOODBYE";
+export const OP_TYPE_SEALED = "SEALED";
+export const OP_COMMAND_SUBMIT_ORDER = "SUBMIT_ORDER";
+export const OP_COMMAND_RUN_MATCH = "RUN_MATCH";

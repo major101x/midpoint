@@ -1,8 +1,9 @@
 /**
- * ★ MAIN CUSTOMIZATION POINT: your extension's handlers.
+ * ★ MAIN CUSTOMIZATION POINT: the Sealed venue's handlers.
  *
- * Mirrors go/internal/extension/extension.go. Each handler follows the same
- * 4-step pattern: decode, validate, execute, respond.
+ * This module holds the order book. It is the only place in the system where
+ * order contents are legible, and it lives inside the enclave, so nothing here
+ * may be exposed through reportState().
  *
  * Handler contract:
  *   (originalMessageHex) => [dataHexOrNull, status, errorOrNull]
@@ -14,116 +15,122 @@
 import { bytesToHex, hexToBytes } from "../base/encoding.js";
 import type { Framework, HandlerResult } from "../base/types.js";
 
-import { decodeSayGoodbye } from "./abi.js";
+import { decodeRunMatch, decodeSubmitOrder } from "./abi.js";
 import {
-  OP_COMMAND_SAY_GOODBYE,
-  OP_COMMAND_SAY_HELLO,
-  OP_TYPE_GREETING,
+  OP_COMMAND_RUN_MATCH,
+  OP_COMMAND_SUBMIT_ORDER,
+  OP_TYPE_SEALED,
 } from "./config.js";
 
-// --- Extension state ---------------------------------------------------------
-// Serialized by the framework; no locking needed here.
-let greetingCount = 0;
-let lastGreeting = "";
-let farewellCount = 0;
-let lastFarewell = "";
+/** A single resting order. Never leaves the enclave in readable form. */
+interface RestingOrder {
+  trader: `0x${string}`;
+  /** Still encrypted. Decryption lands with the sign-port work. */
+  ciphertext: string;
+}
 
-/** Reset all state. Used by tests; not part of the wire contract. */
+// --- Private state -----------------------------------------------------------
+// Keyed by batch so a late order for a closed batch cannot slip in.
+const books = new Map<string, RestingOrder[]>();
+let lastClearedBatch = 0n;
+let lastClearingPrice = 0n;
+
 export function resetState(): void {
-  greetingCount = 0;
-  lastGreeting = "";
-  farewellCount = 0;
-  lastFarewell = "";
+  books.clear();
+  lastClearedBatch = 0n;
+  lastClearingPrice = 0n;
 }
 
-/** Wire handlers to (opType, opCommand) pairs. */
 export function register(framework: Framework): void {
-  framework.handle(OP_TYPE_GREETING, OP_COMMAND_SAY_HELLO, handleSayHello);
-  framework.handle(OP_TYPE_GREETING, OP_COMMAND_SAY_GOODBYE, handleSayGoodbye);
+  framework.handle(OP_TYPE_SEALED, OP_COMMAND_SUBMIT_ORDER, handleSubmitOrder);
+  framework.handle(OP_TYPE_SEALED, OP_COMMAND_RUN_MATCH, handleRunMatch);
 }
 
-/** Snapshot returned by GET /state. Mirrors the Go State struct. */
+/**
+ * Snapshot returned by GET /state.
+ *
+ * DELIBERATELY AGGREGATE ONLY. Order counts and the last clearing price are
+ * already public on chain. Sides, prices, sizes and who placed what must never
+ * appear here: /state is reachable from outside the enclave, and publishing the
+ * book would defeat the entire venue.
+ */
 export function reportState(): unknown {
+  let openOrders = 0;
+  for (const orders of books.values()) openOrders += orders.length;
   return {
-    greetingCount,
-    lastGreeting,
-    farewellCount,
-    lastFarewell,
+    openBatches: books.size,
+    openOrders,
+    lastClearedBatch: lastClearedBatch.toString(),
+    lastClearingPrice: lastClearingPrice.toString(),
   };
 }
 
-/** GREETING/SAY_HELLO — JSON payload {"name": "..."}. */
-export function handleSayHello(msg: string): HandlerResult {
-  // 1. Decode
-  let raw: Uint8Array;
-  try {
-    raw = hexToBytes(msg);
-  } catch (e) {
-    return [null, 0, `decoding request: invalid hex: ${String(e)}`];
-  }
-
-  let req: unknown;
-  try {
-    req = JSON.parse(Buffer.from(raw).toString("utf-8"));
-  } catch (e) {
-    return [null, 0, `decoding request: ${String(e)}`];
-  }
-
-  if (typeof req !== "object" || req === null || Array.isArray(req)) {
-    return [null, 0, "decoding request: expected a JSON object"];
-  }
-
-  // Match Go's DisallowUnknownFields.
-  const unknown = Object.keys(req).filter((k) => k !== "name").sort();
-  if (unknown.length > 0) {
-    return [null, 0, `decoding request: unknown field "${unknown[0]}"`];
-  }
-
-  // 2. Validate
-  const name = (req as { name?: unknown }).name;
-  if (typeof name !== "string" || name === "") {
-    return [null, 0, "name must not be empty"];
-  }
-
-  // 3. Execute
-  greetingCount++;
-  const greeting = `Hello, ${name}! Welcome to Flare Confidential Compute.`;
-  lastGreeting = greeting;
-
-  // 4. Respond
-  const resp = { greeting, greetingNumber: greetingCount };
-  return [bytesToHex(Buffer.from(JSON.stringify(resp), "utf-8")), 1, null];
-}
-
-/** GREETING/SAY_GOODBYE — ABI-encoded (string name, string reason). */
-export function handleSayGoodbye(msg: string): HandlerResult {
-  // 1. Decode
+/** SEALED/SUBMIT_ORDER. Payload is abi.encode(address, uint256, bytes). */
+export function handleSubmitOrder(msg: string): HandlerResult {
   let hex: string;
   try {
-    // Normalize through hexToBytes so malformed input fails here, not in viem.
     hex = bytesToHex(hexToBytes(msg));
   } catch (e) {
     return [null, 0, `decoding request: invalid hex: ${String(e)}`];
   }
 
-  let decoded: { name: string; reason: string };
+  let envelope;
   try {
-    decoded = decodeSayGoodbye(hex as `0x${string}`);
+    envelope = decodeSubmitOrder(hex as `0x${string}`);
   } catch (e) {
     return [null, 0, `decoding request: ${e instanceof Error ? e.message : String(e)}`];
   }
 
-  // 2. Validate
-  if (!decoded.name) {
-    return [null, 0, "name must not be empty"];
+  if (envelope.ciphertext.length <= 2) {
+    return [null, 0, "ciphertext must not be empty"];
   }
 
-  // 3. Execute
-  farewellCount++;
-  const farewell = `Goodbye, ${decoded.name}! Reason: ${decoded.reason}`;
-  lastFarewell = farewell;
+  // TODO(day 6): decrypt via NodeClient, then reject unless the trader named
+  // inside the plaintext equals envelope.trader. That equality check is what
+  // stops a replayed ciphertext being credited to the replayer.
+  const key = envelope.batchId.toString();
+  const book = books.get(key) ?? [];
+  book.push({ trader: envelope.trader, ciphertext: envelope.ciphertext });
+  books.set(key, book);
 
-  // 4. Respond
-  const resp = { farewell, farewellNumber: farewellCount };
+  // Acknowledge with a count only. Echoing anything order-specific would leak
+  // it, because action results are readable through the proxy.
+  const resp = { batchId: key, accepted: true, ordersInBatch: book.length };
+  return [bytesToHex(Buffer.from(JSON.stringify(resp), "utf-8")), 1, null];
+}
+
+/** SEALED/RUN_MATCH. Payload is abi.encode(uint256 batchId). */
+export function handleRunMatch(msg: string): HandlerResult {
+  let hex: string;
+  try {
+    hex = bytesToHex(hexToBytes(msg));
+  } catch (e) {
+    return [null, 0, `decoding request: invalid hex: ${String(e)}`];
+  }
+
+  let batchId: bigint;
+  try {
+    ({ batchId } = decodeRunMatch(hex as `0x${string}`));
+  } catch (e) {
+    return [null, 0, `decoding request: ${e instanceof Error ? e.message : String(e)}`];
+  }
+
+  const key = batchId.toString();
+  const book = books.get(key);
+  if (book === undefined || book.length === 0) {
+    return [null, 0, `no orders for batch ${key}`];
+  }
+
+  // TODO(day 7): uniform-price clearing over the decrypted book, then sign the
+  // settlement payload with the in-enclave key (spec Q1).
+  lastClearedBatch = batchId;
+  books.delete(key);
+
+  const resp = {
+    batchId: key,
+    orders: book.length,
+    cleared: false,
+    reason: "clearing not yet implemented",
+  };
   return [bytesToHex(Buffer.from(JSON.stringify(resp), "utf-8")), 1, null];
 }

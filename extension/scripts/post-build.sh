@@ -152,6 +152,7 @@ go run ./cmd/register-tee \
     -h "${EXT_PROXY_HOST_URL:-$EXT_PROXY_URL}" \
     -ep "$NORMAL_PROXY_URL" \
     -state "$PROJECT_DIR/config/register-tee.state" \
+    -command rRap \
     || die "Register TEE failed"
 
 echo ""

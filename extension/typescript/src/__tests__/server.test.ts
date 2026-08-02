@@ -8,15 +8,22 @@ import * as handlers from "../app/handlers.js";
 import { bytesToHex, hexToBytes, stringToBytes32Hex } from "../base/encoding.js";
 import { Server } from "../base/server.js";
 
-const GOODBYE_PARAMS = [
-  {
-    type: "tuple",
-    components: [
-      { name: "name", type: "string" },
-      { name: "reason", type: "string" },
-    ],
-  },
+const SUBMIT_PARAMS = [
+  { name: "trader", type: "address" },
+  { name: "batchId", type: "uint256" },
+  { name: "ciphertext", type: "bytes" },
 ] as const;
+
+const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
+
+const TRADER = "0x00000000000000000000000000000000000000A1" as const;
+
+/** A well-formed SUBMIT_ORDER payload. */
+function submitPayload(batchId = 1n, ciphertext: `0x${string}` = "0xdeadbeef"): Buffer {
+  return Buffer.from(
+    hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [TRADER, batchId, ciphertext])),
+  );
+}
 
 let srv: Server;
 
@@ -34,8 +41,8 @@ function buildAction(opts: {
   actionId?: string;
 } = {}): string {
   const {
-    opType = "GREETING",
-    opCommand = "SAY_HELLO",
+    opType = "SEALED",
+    opCommand = "SUBMIT_ORDER",
     original = Buffer.alloc(0),
     actionId = `0x${"11".repeat(32)}`,
   } = opts;
@@ -130,7 +137,7 @@ describe("malformed input", () => {
 
 describe("ActionResult wire format", () => {
   it("returns the success shape", async () => {
-    const original = Buffer.from(JSON.stringify({ name: "World" }));
+    const original = submitPayload();
     const [status, body] = await srv.handleRequest(
       "POST", "/action", buildAction({ original }),
     );
@@ -139,24 +146,24 @@ describe("ActionResult wire format", () => {
     expect(status).toBe(200);
     expect(r.status).toBe(1);
     expect(r.log).toBe("ok");
-    expect(r.opType).toBe(stringToBytes32Hex("GREETING"));
-    expect(r.opCommand).toBe(stringToBytes32Hex("SAY_HELLO"));
+    expect(r.opType).toBe(stringToBytes32Hex("SEALED"));
+    expect(r.opCommand).toBe(stringToBytes32Hex("SUBMIT_ORDER"));
     expect(String(r.data).startsWith("0x")).toBe(true);
   });
 
   it("sends version as a plain string, not bytes32", async () => {
     // Contract §4.4: tee-node declares `Version string`. The sign repo's
     // Python/TS ports hex-encode this and are wrong; this test pins it.
-    const original = Buffer.from(JSON.stringify({ name: "World" }));
+    const original = submitPayload();
     const [, body] = await srv.handleRequest("POST", "/action", buildAction({ original }));
     const r = body as Record<string, unknown>;
 
-    expect(r.version).toBe("0.1.0");
+    expect(r.version).toBe("0.2.0");
     expect(String(r.version).startsWith("0x")).toBe(false);
   });
 
   it("reports handler failure as HTTP 200 with status 0", async () => {
-    const original = Buffer.from(JSON.stringify({ name: "" }));
+    const original = submitPayload(1n, "0x");
     const [status, body] = await srv.handleRequest(
       "POST", "/action", buildAction({ original }),
     );
@@ -173,7 +180,7 @@ describe("ActionResult wire format", () => {
     // tee-node's ActionResult has no omitempty tags, so every field appears on
     // the wire regardless of value. Verified against Go by the conformance
     // fixtures in testdata/conformance/.
-    const original = Buffer.from(JSON.stringify({ name: "W" }));
+    const original = submitPayload();
     const [, body] = await srv.handleRequest("POST", "/action", buildAction({ original }));
     const r = body as Record<string, unknown>;
 
@@ -186,7 +193,7 @@ describe("ActionResult wire format", () => {
 
   it("echoes id and submissionTag", async () => {
     const actionId = `0x${"ab".repeat(32)}`;
-    const original = Buffer.from(JSON.stringify({ name: "W" }));
+    const original = submitPayload();
     const [, body] = await srv.handleRequest(
       "POST", "/action", buildAction({ original, actionId }),
     );
@@ -196,19 +203,19 @@ describe("ActionResult wire format", () => {
     expect(r.submissionTag).toBe("submit");
   });
 
-  it("handles the SAY_GOODBYE ABI path", async () => {
-    const original = Buffer.from(
-      hexToBytes(encodeAbiParameters(GOODBYE_PARAMS, [{ name: "World", reason: "done" }])),
-    );
+  it("handles the RUN_MATCH ABI path", async () => {
+    await srv.handleRequest("POST", "/action", buildAction({ original: submitPayload() }));
+
+    const original = Buffer.from(hexToBytes(encodeAbiParameters(MATCH_PARAMS, [1n])));
     const [, body] = await srv.handleRequest(
-      "POST", "/action", buildAction({ opCommand: "SAY_GOODBYE", original }),
+      "POST", "/action", buildAction({ opCommand: "RUN_MATCH", original }),
     );
     const r = body as Record<string, unknown>;
 
     expect(r.status).toBe(1);
-    expect(JSON.parse(Buffer.from(hexToBytes(r.data as string)).toString("utf-8"))).toEqual({
-      farewell: "Goodbye, World! Reason: done",
-      farewellNumber: 1,
+    expect(JSON.parse(Buffer.from(hexToBytes(r.data as string)).toString("utf-8"))).toMatchObject({
+      batchId: "1",
+      orders: 1,
     });
   });
 });
@@ -220,18 +227,18 @@ describe("state wire format", () => {
     const r = body as Record<string, unknown>;
 
     expect(status).toBe(200);
-    expect(r.stateVersion).toBe(stringToBytes32Hex("0.1.0"));
+    expect(r.stateVersion).toBe(stringToBytes32Hex("0.2.0"));
     expect(String(r.stateVersion).length).toBe(66);
   });
 
   it("reflects handler effects", async () => {
-    const original = Buffer.from(JSON.stringify({ name: "World" }));
+    const original = submitPayload();
     await srv.handleRequest("POST", "/action", buildAction({ original }));
     const [, body] = await srv.handleRequest("GET", "/state", "");
     const state = (body as { state: Record<string, unknown> }).state;
 
-    expect(state.greetingCount).toBe(1);
-    expect(String(state.lastGreeting).startsWith("Hello, World!")).toBe(true);
+    expect(state.openOrders).toBe(1);
+    expect(state.openBatches).toBe(1);
   });
 });
 
@@ -239,12 +246,12 @@ describe("serialization", () => {
   it("does not wedge the queue when a handler throws", async () => {
     // A rejected handler must not block subsequent requests (contract §5).
     const boom = new Server(0, 0, VERSION, (f) => {
-      f.handle("GREETING", "SAY_HELLO", () => {
+      f.handle("SEALED", "SUBMIT_ORDER", () => {
         throw new Error("boom");
       });
     }, () => ({ ok: true }));
 
-    const original = Buffer.from(JSON.stringify({ name: "W" }));
+    const original = submitPayload();
     await expect(
       boom.handleRequest("POST", "/action", buildAction({ original })),
     ).rejects.toThrow("boom");

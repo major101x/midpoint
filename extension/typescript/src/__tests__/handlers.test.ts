@@ -1,144 +1,140 @@
-/** Hello World handlers — behaviour must match go/internal/extension/extension.go. */
+/**
+ * Handler tests for the Sealed venue.
+ *
+ * The confidentiality assertions are the important ones. A venue that clears
+ * correctly but leaks its book is worthless, so "state never exposes an order"
+ * is tested as a first-class property rather than assumed.
+ */
 
 import { encodeAbiParameters } from "viem";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import * as handlers from "../app/handlers.js";
+import { handleRunMatch, handleSubmitOrder, reportState, resetState } from "../app/handlers.js";
 import { bytesToHex, hexToBytes } from "../base/encoding.js";
-import type { HandlerResult } from "../base/types.js";
 
-const GOODBYE_PARAMS = [
-  {
-    type: "tuple",
-    components: [
-      { name: "name", type: "string" },
-      { name: "reason", type: "string" },
-    ],
-  },
+const SUBMIT_PARAMS = [
+  { name: "trader", type: "address" },
+  { name: "batchId", type: "uint256" },
+  { name: "ciphertext", type: "bytes" },
 ] as const;
 
-function jsonMsg(obj: unknown): string {
-  return bytesToHex(Buffer.from(JSON.stringify(obj), "utf-8"));
+const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
+
+const ALICE = "0x00000000000000000000000000000000000000A1" as const;
+const BOB = "0x00000000000000000000000000000000000000b0" as const;
+
+function submitMsg(trader: `0x${string}`, batchId: bigint, ciphertext: `0x${string}`): string {
+  return bytesToHex(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [trader, batchId, ciphertext])));
 }
 
-function goodbyeMsg(name: string, reason: string): string {
-  return encodeAbiParameters(GOODBYE_PARAMS, [{ name, reason }]);
+function matchMsg(batchId: bigint): string {
+  return bytesToHex(hexToBytes(encodeAbiParameters(MATCH_PARAMS, [batchId])));
 }
 
-function parseData(result: HandlerResult): Record<string, unknown> {
-  return JSON.parse(Buffer.from(hexToBytes(result[0]!)).toString("utf-8"));
+function decodeData(dataHex: string | null): Record<string, unknown> {
+  if (dataHex === null) throw new Error("expected data");
+  return JSON.parse(Buffer.from(hexToBytes(dataHex)).toString("utf-8"));
 }
 
-beforeEach(() => handlers.resetState());
-afterEach(() => handlers.resetState());
+describe("SUBMIT_ORDER", () => {
+  beforeEach(() => resetState());
 
-describe("handleSayHello", () => {
-  it("greets and returns the counter", () => {
-    const r = handlers.handleSayHello(jsonMsg({ name: "World" }));
-    expect([r[1], r[2]]).toEqual([1, null]);
-    expect(parseData(r)).toEqual({
-      greeting: "Hello, World! Welcome to Flare Confidential Compute.",
-      greetingNumber: 1,
-    });
+  it("accepts an order and counts it against its batch", () => {
+    const [data, status, err] = handleSubmitOrder(submitMsg(ALICE, 1n, "0xdeadbeef"));
+    expect(err).toBeNull();
+    expect(status).toBe(1);
+    expect(decodeData(data)).toEqual({ batchId: "1", accepted: true, ordersInBatch: 1 });
   });
 
-  it("increments the counter across calls", () => {
-    for (const expected of [1, 2, 3]) {
-      const r = handlers.handleSayHello(jsonMsg({ name: "A" }));
-      expect(parseData(r).greetingNumber).toBe(expected);
-    }
+  it("keeps separate books per batch", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+    handleSubmitOrder(submitMsg(BOB, 1n, "0xbb"));
+    const [data] = handleSubmitOrder(submitMsg(ALICE, 2n, "0xcc"));
+    expect(decodeData(data).ordersInBatch).toBe(1);
+    expect((reportState() as { openBatches: number }).openBatches).toBe(2);
   });
 
-  it("rejects an empty name", () => {
-    const r = handlers.handleSayHello(jsonMsg({ name: "" }));
-    expect([r[0], r[1]]).toEqual([null, 0]);
-    expect(r[2]).toContain("name must not be empty");
+  it("rejects an empty ciphertext", () => {
+    const [, status, err] = handleSubmitOrder(submitMsg(ALICE, 1n, "0x"));
+    expect(status).toBe(0);
+    expect(err).toContain("ciphertext");
   });
 
-  it("rejects a missing name", () => {
-    const r = handlers.handleSayHello(jsonMsg({}));
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("name must not be empty");
+  it("rejects malformed hex", () => {
+    const [, status, err] = handleSubmitOrder("nonsense");
+    expect(status).toBe(0);
+    expect(err).toContain("decoding request");
   });
 
-  it("rejects unknown fields, matching Go's DisallowUnknownFields", () => {
-    const r = handlers.handleSayHello(jsonMsg({ name: "A", extra: 1 }));
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("unknown field");
-  });
-
-  it("rejects invalid JSON", () => {
-    const r = handlers.handleSayHello(bytesToHex(Buffer.from("not json")));
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("decoding request");
-  });
-
-  it("rejects invalid hex", () => {
-    const r = handlers.handleSayHello("0xZZ");
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("decoding request");
-  });
-
-  it("does not increment the counter on failure", () => {
-    handlers.handleSayHello(jsonMsg({ name: "" }));
-    const r = handlers.handleSayHello(jsonMsg({ name: "A" }));
-    expect(parseData(r).greetingNumber).toBe(1);
+  it("rejects a payload that is not the expected ABI shape", () => {
+    const [, status, err] = handleSubmitOrder("0x1234");
+    expect(status).toBe(0);
+    expect(err).toContain("decoding request");
   });
 });
 
-describe("handleSayGoodbye", () => {
-  it("decodes the ABI payload and returns a farewell", () => {
-    const r = handlers.handleSayGoodbye(goodbyeMsg("World", "done"));
-    expect([r[1], r[2]]).toEqual([1, null]);
-    expect(parseData(r)).toEqual({
-      farewell: "Goodbye, World! Reason: done",
-      farewellNumber: 1,
-    });
+describe("RUN_MATCH", () => {
+  beforeEach(() => resetState());
+
+  it("consumes the batch it cleared", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+    handleSubmitOrder(submitMsg(BOB, 1n, "0xbb"));
+
+    const [data, status, err] = handleRunMatch(matchMsg(1n));
+    expect(err).toBeNull();
+    expect(status).toBe(1);
+    expect(decodeData(data).orders).toBe(2);
+    expect((reportState() as { openBatches: number }).openBatches).toBe(0);
   });
 
-  it("keeps its counter independent of greetings", () => {
-    handlers.handleSayHello(jsonMsg({ name: "A" }));
-    const r = handlers.handleSayGoodbye(goodbyeMsg("B", "r"));
-    expect(parseData(r).farewellNumber).toBe(1);
+  it("refuses to clear a batch with no orders", () => {
+    const [, status, err] = handleRunMatch(matchMsg(99n));
+    expect(status).toBe(0);
+    expect(err).toContain("no orders");
   });
 
-  it("rejects an empty name", () => {
-    const r = handlers.handleSayGoodbye(goodbyeMsg("", "r"));
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("name must not be empty");
+  it("refuses to clear the same batch twice", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+    expect(handleRunMatch(matchMsg(1n))[1]).toBe(1);
+    expect(handleRunMatch(matchMsg(1n))[1]).toBe(0);
   });
 
-  it("allows an empty reason, matching Go which validates name only", () => {
-    const r = handlers.handleSayGoodbye(goodbyeMsg("W", ""));
-    expect(r[1]).toBe(1);
-    expect(parseData(r).farewell).toBe("Goodbye, W! Reason: ");
-  });
-
-  it("rejects a JSON payload — this operation is ABI-encoded", () => {
-    const r = handlers.handleSayGoodbye(jsonMsg({ name: "W" }));
-    expect(r[1]).toBe(0);
-    expect(r[2]).toContain("decoding request");
+  it("leaves other batches untouched", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+    handleSubmitOrder(submitMsg(BOB, 2n, "0xbb"));
+    handleRunMatch(matchMsg(1n));
+    expect((reportState() as { openOrders: number }).openOrders).toBe(1);
   });
 });
 
-describe("reportState", () => {
-  it("starts empty", () => {
-    expect(handlers.reportState()).toEqual({
-      greetingCount: 0,
-      lastGreeting: "",
-      farewellCount: 0,
-      lastFarewell: "",
-    });
+describe("state confidentiality", () => {
+  beforeEach(() => resetState());
+
+  /**
+   * GET /state is reachable from outside the enclave. If any part of an order
+   * reaches it the venue is pointless, so this asserts on the serialized bytes
+   * rather than on named fields, which a nested leak could slip past.
+   */
+  it("never exposes ciphertext or trader", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xc0ffee1234567890"));
+    handleSubmitOrder(submitMsg(BOB, 1n, "0xfeedface0987654321"));
+
+    const serialized = JSON.stringify(reportState()).toLowerCase();
+
+    expect(serialized).not.toContain("c0ffee");
+    expect(serialized).not.toContain("feedface");
+    expect(serialized).not.toContain("ciphertext");
+    expect(serialized).not.toContain("trader");
+    expect(serialized).not.toContain("0x");
   });
 
-  it("tracks both operations", () => {
-    handlers.handleSayHello(jsonMsg({ name: "A" }));
-    handlers.handleSayGoodbye(goodbyeMsg("B", "r"));
-    expect(handlers.reportState()).toEqual({
-      greetingCount: 1,
-      lastGreeting: "Hello, A! Welcome to Flare Confidential Compute.",
-      farewellCount: 1,
-      lastFarewell: "Goodbye, B! Reason: r",
-    });
+  it("reports only aggregates", () => {
+    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+    expect(Object.keys(reportState() as object).sort()).toEqual([
+      "lastClearedBatch",
+      "lastClearingPrice",
+      "openBatches",
+      "openOrders",
+    ]);
   });
 });
