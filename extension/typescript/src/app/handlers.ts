@@ -3,7 +3,7 @@
  *
  * This module holds the order book. It is the only place in the system where
  * order contents are legible, and it lives inside the enclave, so nothing here
- * may be exposed through reportState().
+ * may be exposed through reportState() or through an action result.
  *
  * Handler contract:
  *   (originalMessageHex) => [dataHexOrNull, status, errorOrNull]
@@ -13,6 +13,7 @@
  */
 
 import { bytesToHex, hexToBytes } from "../base/encoding.js";
+import { NodeClient } from "../base/node.js";
 import type { Framework, HandlerResult } from "../base/types.js";
 
 import { decodeRunMatch, decodeSubmitOrder } from "./abi.js";
@@ -21,19 +22,31 @@ import {
   OP_COMMAND_SUBMIT_ORDER,
   OP_TYPE_SEALED,
 } from "./config.js";
-
-/** A single resting order. Never leaves the enclave in readable form. */
-interface RestingOrder {
-  trader: `0x${string}`;
-  /** Still encrypted. Decryption lands with the sign-port work. */
-  ciphertext: string;
-}
+import { OrderValidationError, parseOrder, type RestingOrder } from "./order.js";
 
 // --- Private state -----------------------------------------------------------
 // Keyed by batch so a late order for a closed batch cannot slip in.
 const books = new Map<string, RestingOrder[]>();
 let lastClearedBatch = 0n;
 let lastClearingPrice = 0n;
+
+/** Decrypts a ciphertext to plaintext. Swapped out in tests. */
+export type Decryptor = (ciphertext: Uint8Array) => Promise<Uint8Array>;
+
+let decryptor: Decryptor = async () => {
+  throw new Error("decryptor not configured");
+};
+
+/** Called once at startup with the tee-node sign port. */
+export function configure(signPort: string | number): void {
+  const client = new NodeClient(signPort);
+  decryptor = (ct) => client.decrypt(ct);
+}
+
+/** Test seam. Not used in production. */
+export function setDecryptor(fn: Decryptor): void {
+  decryptor = fn;
+}
 
 export function resetState(): void {
   books.clear();
@@ -66,7 +79,7 @@ export function reportState(): unknown {
 }
 
 /** SEALED/SUBMIT_ORDER. Payload is abi.encode(address, uint256, bytes). */
-export function handleSubmitOrder(msg: string): HandlerResult {
+export async function handleSubmitOrder(msg: string): Promise<HandlerResult> {
   let hex: string;
   try {
     hex = bytesToHex(hexToBytes(msg));
@@ -85,12 +98,26 @@ export function handleSubmitOrder(msg: string): HandlerResult {
     return [null, 0, "ciphertext must not be empty"];
   }
 
-  // TODO(day 6): decrypt via NodeClient, then reject unless the trader named
-  // inside the plaintext equals envelope.trader. That equality check is what
-  // stops a replayed ciphertext being credited to the replayer.
+  let plaintext: Uint8Array;
+  try {
+    plaintext = await decryptor(hexToBytes(envelope.ciphertext));
+  } catch {
+    // Deliberately terse. This string is readable through the proxy, and a
+    // detailed failure reason could hint at the ciphertext's structure.
+    return [null, 0, "decryption failed"];
+  }
+
+  let order: RestingOrder;
+  try {
+    order = parseOrder(plaintext, envelope.trader, envelope.batchId);
+  } catch (e) {
+    if (e instanceof OrderValidationError) return [null, 0, `invalid order: ${e.message}`];
+    return [null, 0, "invalid order"];
+  }
+
   const key = envelope.batchId.toString();
   const book = books.get(key) ?? [];
-  book.push({ trader: envelope.trader, ciphertext: envelope.ciphertext });
+  book.push(order);
   books.set(key, book);
 
   // Acknowledge with a count only. Echoing anything order-specific would leak
@@ -121,8 +148,8 @@ export function handleRunMatch(msg: string): HandlerResult {
     return [null, 0, `no orders for batch ${key}`];
   }
 
-  // TODO(day 7): uniform-price clearing over the decrypted book, then sign the
-  // settlement payload with the in-enclave key (spec Q1).
+  // TODO(day 7): uniform-price clearing, then sign the settlement payload with
+  // the TEE identity key via the sign port's POST /sign (spec §7 Q1).
   lastClearedBatch = batchId;
   books.delete(key);
 

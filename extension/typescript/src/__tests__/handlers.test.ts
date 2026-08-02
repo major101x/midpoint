@@ -9,7 +9,13 @@
 import { encodeAbiParameters } from "viem";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { handleRunMatch, handleSubmitOrder, reportState, resetState } from "../app/handlers.js";
+import {
+  handleRunMatch,
+  handleSubmitOrder,
+  reportState,
+  resetState,
+  setDecryptor,
+} from "../app/handlers.js";
 import { bytesToHex, hexToBytes } from "../base/encoding.js";
 
 const SUBMIT_PARAMS = [
@@ -21,6 +27,27 @@ const SUBMIT_PARAMS = [
 const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
 
 const ALICE = "0x00000000000000000000000000000000000000A1" as const;
+
+/** Builds a plaintext order and returns it as a fake "ciphertext" hex blob. */
+function order(
+  trader: string,
+  batchId: bigint,
+  overrides: Record<string, unknown> = {},
+): `0x${string}` {
+  const o = {
+    trader,
+    batchId: batchId.toString(),
+    side: "BUY",
+    limitPrice: "1064000",
+    size: "5000000",
+    nonce: "n1",
+    ...overrides,
+  };
+  return `0x${Buffer.from(JSON.stringify(o), "utf-8").toString("hex")}`;
+}
+
+/** Identity decryptor: tests supply plaintext directly as the ciphertext. */
+beforeEach(() => setDecryptor(async (ct) => ct));
 const BOB = "0x00000000000000000000000000000000000000b0" as const;
 
 function submitMsg(trader: `0x${string}`, batchId: bigint, ciphertext: `0x${string}`): string {
@@ -39,35 +66,35 @@ function decodeData(dataHex: string | null): Record<string, unknown> {
 describe("SUBMIT_ORDER", () => {
   beforeEach(() => resetState());
 
-  it("accepts an order and counts it against its batch", () => {
-    const [data, status, err] = handleSubmitOrder(submitMsg(ALICE, 1n, "0xdeadbeef"));
+  it("accepts an order and counts it against its batch", async () => {
+    const [data, status, err] = await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
     expect(err).toBeNull();
     expect(status).toBe(1);
     expect(decodeData(data)).toEqual({ batchId: "1", accepted: true, ordersInBatch: 1 });
   });
 
-  it("keeps separate books per batch", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
-    handleSubmitOrder(submitMsg(BOB, 1n, "0xbb"));
-    const [data] = handleSubmitOrder(submitMsg(ALICE, 2n, "0xcc"));
+  it("keeps separate books per batch", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
+    await handleSubmitOrder(submitMsg(BOB, 1n, order(BOB, 1n)));
+    const [data] = await handleSubmitOrder(submitMsg(ALICE, 2n, order(ALICE, 2n)));
     expect(decodeData(data).ordersInBatch).toBe(1);
     expect((reportState() as { openBatches: number }).openBatches).toBe(2);
   });
 
-  it("rejects an empty ciphertext", () => {
-    const [, status, err] = handleSubmitOrder(submitMsg(ALICE, 1n, "0x"));
+  it("rejects an empty ciphertext", async () => {
+    const [, status, err] = await handleSubmitOrder(submitMsg(ALICE, 1n, "0x"));
     expect(status).toBe(0);
     expect(err).toContain("ciphertext");
   });
 
-  it("rejects malformed hex", () => {
-    const [, status, err] = handleSubmitOrder("nonsense");
+  it("rejects malformed hex", async () => {
+    const [, status, err] = await handleSubmitOrder("nonsense");
     expect(status).toBe(0);
     expect(err).toContain("decoding request");
   });
 
-  it("rejects a payload that is not the expected ABI shape", () => {
-    const [, status, err] = handleSubmitOrder("0x1234");
+  it("rejects a payload that is not the expected ABI shape", async () => {
+    const [, status, err] = await handleSubmitOrder("0x1234");
     expect(status).toBe(0);
     expect(err).toContain("decoding request");
   });
@@ -76,9 +103,9 @@ describe("SUBMIT_ORDER", () => {
 describe("RUN_MATCH", () => {
   beforeEach(() => resetState());
 
-  it("consumes the batch it cleared", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
-    handleSubmitOrder(submitMsg(BOB, 1n, "0xbb"));
+  it("consumes the batch it cleared", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
+    await handleSubmitOrder(submitMsg(BOB, 1n, order(BOB, 1n)));
 
     const [data, status, err] = handleRunMatch(matchMsg(1n));
     expect(err).toBeNull();
@@ -93,15 +120,15 @@ describe("RUN_MATCH", () => {
     expect(err).toContain("no orders");
   });
 
-  it("refuses to clear the same batch twice", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+  it("refuses to clear the same batch twice", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
     expect(handleRunMatch(matchMsg(1n))[1]).toBe(1);
     expect(handleRunMatch(matchMsg(1n))[1]).toBe(0);
   });
 
-  it("leaves other batches untouched", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
-    handleSubmitOrder(submitMsg(BOB, 2n, "0xbb"));
+  it("leaves other batches untouched", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
+    await handleSubmitOrder(submitMsg(BOB, 2n, order(BOB, 2n)));
     handleRunMatch(matchMsg(1n));
     expect((reportState() as { openOrders: number }).openOrders).toBe(1);
   });
@@ -115,21 +142,21 @@ describe("state confidentiality", () => {
    * reaches it the venue is pointless, so this asserts on the serialized bytes
    * rather than on named fields, which a nested leak could slip past.
    */
-  it("never exposes ciphertext or trader", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xc0ffee1234567890"));
-    handleSubmitOrder(submitMsg(BOB, 1n, "0xfeedface0987654321"));
+  it("never exposes ciphertext or trader", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n, {limitPrice: "1234567"})));
+    await handleSubmitOrder(submitMsg(BOB, 1n, order(BOB, 1n, {size: "7654321"})));
 
     const serialized = JSON.stringify(reportState()).toLowerCase();
 
-    expect(serialized).not.toContain("c0ffee");
-    expect(serialized).not.toContain("feedface");
+    expect(serialized).not.toContain("1234567");
+    expect(serialized).not.toContain("7654321");
     expect(serialized).not.toContain("ciphertext");
     expect(serialized).not.toContain("trader");
     expect(serialized).not.toContain("0x");
   });
 
-  it("reports only aggregates", () => {
-    handleSubmitOrder(submitMsg(ALICE, 1n, "0xaa"));
+  it("reports only aggregates", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
     expect(Object.keys(reportState() as object).sort()).toEqual([
       "lastClearedBatch",
       "lastClearingPrice",

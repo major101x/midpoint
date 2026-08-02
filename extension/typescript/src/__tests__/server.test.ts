@@ -18,17 +18,29 @@ const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
 
 const TRADER = "0x00000000000000000000000000000000000000A1" as const;
 
-/** A well-formed SUBMIT_ORDER payload. */
-function submitPayload(batchId = 1n, ciphertext: `0x${string}` = "0xdeadbeef"): Buffer {
-  return Buffer.from(
-    hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [TRADER, batchId, ciphertext])),
-  );
+/** A well-formed SUBMIT_ORDER payload carrying a valid plaintext order. */
+function submitPayload(batchId = 1n, ciphertext?: `0x${string}`): Buffer {
+  const ct =
+    ciphertext ??
+    (`0x${Buffer.from(
+      JSON.stringify({
+        trader: TRADER,
+        batchId: batchId.toString(),
+        side: "BUY",
+        limitPrice: "1064000",
+        size: "5000000",
+        nonce: "n1",
+      }),
+      "utf-8",
+    ).toString("hex")}` as `0x${string}`);
+  return Buffer.from(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [TRADER, batchId, ct])));
 }
 
 let srv: Server;
 
 beforeEach(() => {
   handlers.resetState();
+  handlers.setDecryptor(async (ct) => ct);
   srv = new Server(0, 0, VERSION, handlers.register, handlers.reportState);
 });
 afterEach(() => handlers.resetState());

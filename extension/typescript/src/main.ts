@@ -6,13 +6,16 @@
  */
 
 import { VERSION } from "./app/config.js";
-import { register, reportState } from "./app/handlers.js";
+import { configure, register, reportState } from "./app/handlers.js";
 import { Server } from "./base/server.js";
 
 async function main(): Promise<void> {
   // Defaults match go/internal/config/config.go.
   const extPort = process.env.EXTENSION_PORT ?? "8080";
   const signPort = process.env.SIGN_PORT ?? "9090";
+
+  // Hand the sign port to the handlers so they can reach POST /decrypt.
+  configure(signPort);
 
   const server = new Server(extPort, signPort, VERSION, register, reportState);
 
