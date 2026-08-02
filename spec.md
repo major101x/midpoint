@@ -105,7 +105,7 @@ Rejects orders from addresses with zero balance (cheap spam guard that leaks not
 **Sealed FCE (TypeScript)**: An HTTP server satisfying `docs/extension-contract.md`. Handlers registered against `(SEALED, SUBMIT_ORDER)` and `(SEALED, RUN_MATCH)`. On submit: decrypt via `NodeClient`, validate, insert into the in-memory book for the current batch. On match: clear, produce the settlement payload, sign it, return it. `GET /state` exposes only non-sensitive aggregates, namely batch number, order count, and last clearing price. **Never the book.**
 
 **`Settlement.sol`**: Accepts `(batchId, fills[], clearingPrice, signature)`. Rejects unless:
-1. `ecrecover(payloadHash, signature)` equals the current `settlementSigner`, the address of the key held inside the enclave (see §7 Q1);
+1. `ecrecover` of the EIP-191 digest equals the `batchTee` recorded for that batch, so only the enclave that held the book can settle it (see §7 Q1);
 2. `batchId` is the next unsettled batch (replay protection);
 3. `clearingPrice` is within the FTSO band (below);
 4. fills net to zero, meaning total bought equals total sold.
@@ -212,7 +212,36 @@ Scoping down is the correct move solo, and stating the cut lines clearly scores 
 
 ## 7. Open questions to resolve first
 
-**Q1: RESOLVED 2026-08-01. Use an in-enclave settlement key, the `fce-sign` pattern.**
+**Q1: REVISED 2026-08-02. The TEE signs directly with its own identity key. No key management at all.**
+
+The day 1 answer below (an in-enclave generated key, the `fce-sign` pattern) is superseded. Reading `tee-node`'s sign port turned up `POST /sign`, which the scaffold's `NodeClient` does not wrap and the docs do not mention:
+
+```
+POST localhost:$SIGN_PORT/sign   {"message": "<base64>"}
+  -> {"message": "<base64>", "signature": "<base64>"}   65 bytes, r || s || v
+```
+
+It computes `crypto.Sign(accounts.TextHash(keccak256(message)), teePrivateKey)`. `TextHash` is EIP-191, so the digest is exactly:
+
+```
+keccak256("\x19Ethereum Signed Message:\n32" || keccak256(payload))
+```
+
+which Solidity can rebuild in two lines. Crucially the signer is the TEE's **identity** key, whose address is the machine id registered on chain.
+
+**Verified end to end on 2026-08-02.** Signing the probe string `sealed-signing-probe` inside the running enclave and recovering the signature gave `0x2fd46e88149d0bf66d66a886bd3a93f857b55a86`, exactly the registered TEE machine. This is the check that failed on day 3 for the `ActionResult` path, which wraps its digest in an extra domain-separated payload; `/sign` has no such wrapper.
+
+Why this is better than a generated key:
+
+- Nobody ever holds the settlement private key, not even at generation time. The `fce-sign` load-a-key pattern always left whoever created the key able to forge settlements.
+- The signer is verifiable against the TEE machine registry, so settlement is tied to attestation rather than to an address an admin typed in.
+- One fewer setup step and one fewer thing to get wrong after a restart.
+
+**Bind the signature to the batch's own enclave.** `OrderBook` already pins `batchTee` for a batch's lifetime, so `Settlement` should require that the recovered signer equals the `batchTee` recorded for *that* batch. The enclave that held the book is then the only one that can settle it, which needs no admin setter and closes the ephemeral-key problem without configuration.
+
+---
+
+**Superseded (kept for the reasoning): 2026-08-01, in-enclave settlement key.**
 
 Path (a), reusing the TEE's own result signature, was investigated and rejected. Findings:
 
