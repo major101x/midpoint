@@ -1,0 +1,37 @@
+# Build context for go/Dockerfile is the repo root. BuildKit prefers this file
+# over the root .dockerignore because it is named <dockerfile-path>.dockerignore.
+#
+# Excluding the other language directories matters for more than build speed:
+# node_modules and __pycache__ are large, host-dependent trees, and anything in
+# the context can perturb layer hashes and undermine reproducibility.
+.git
+.gitignore
+.env
+.env.*
+*.md
+docs/
+testing/
+.superpowers/
+.claude/
+cache/
+out/
+results/
+config/
+contracts/
+scripts/
+proxy/
+tools/
+testdata/
+foundry.toml
+docker-compose*.yaml
+Dockerfile*
+.dockerignore
+
+# Other language implementations — not part of the Go image.
+python/
+typescript/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/dist/

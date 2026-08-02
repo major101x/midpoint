@@ -1,0 +1,20 @@
+{
+  "name": "16-get-state",
+  "description": "GET /state returns bytes32 stateVersion and the accumulated state",
+  "request": {
+    "method": "GET",
+    "path": "/state"
+  },
+  "expect": {
+    "status": 200,
+    "json": {
+      "stateVersion": "0x302e312e30000000000000000000000000000000000000000000000000000000",
+      "state": {
+        "greetingCount": 2,
+        "lastGreeting": "Hello, Second! Welcome to Flare Confidential Compute.",
+        "farewellCount": 2,
+        "lastFarewell": "Goodbye, W! Reason: "
+      }
+    }
+  }
+}

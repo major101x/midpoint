@@ -1,0 +1,40 @@
+# Build context for typescript/Dockerfile is the repo root. BuildKit prefers
+# this file over the root .dockerignore because of the <dockerfile>.dockerignore name.
+.git
+.gitignore
+.env
+.env.*
+*.md
+docs/
+testing/
+.superpowers/
+.claude/
+cache/
+out/
+results/
+config/
+contracts/
+scripts/
+proxy/
+tools/
+testdata/
+docker/
+foundry.toml
+docker-compose*.yaml
+Dockerfile*
+.dockerignore
+
+# Other language implementations.
+go/
+python/
+
+# Local build artifacts. node_modules is rebuilt in-image by `npm ci`; copying
+# the host tree in would defeat the lockfile and break reproducibility.
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/dist/
+typescript/src/__tests__/
+typescript/vitest.config.ts
+typescript/language.env

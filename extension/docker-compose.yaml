@@ -1,0 +1,62 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "${REDIS_BIND:-127.0.0.1:6382}:6379"
+    tmpfs:
+      - /data
+
+  ext-proxy:
+    image: ${REGISTRY:-local}/tee-proxy
+    volumes:
+      - ./config/proxy/extension_proxy.docker.toml:/app/config/config.toml:ro
+    environment:
+      - PROXY_PRIVATE_KEY=${PROXY_PRIVATE_KEY:-983760a4ebf75b2ac3a93531168a0f225d01e5dc6e3568adbd46233ba1fb4fa4}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${EXT_PROXY_INTERNAL_BIND:-0.0.0.0:6673}:6663"
+      - "${EXT_PROXY_EXTERNAL_BIND:-0.0.0.0:6674}:6664"
+    depends_on:
+      - redis
+
+  extension-tee:
+    build:
+      context: .
+      # Selected by LANGUAGE in .env; start-services.sh resolves <LANGUAGE>/Dockerfile
+      # by directory convention. Adding a language needs no change here.
+      dockerfile: ${EXTENSION_DOCKERFILE:-go/Dockerfile}
+      args:
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:-0}
+        # Consumed by language images that build tee-node from source. A Go
+        # pseudo-version pin is a commit SHA, not a tag — see scripts/lib/versions.sh.
+        TEE_NODE_REF: ${TEE_NODE_REF:-}
+    env_file:
+      - path: ./config/extension.env
+        required: false
+    environment:
+      - MODE=${MODE:-1}
+      # Chain id the node binds signatures to — must match the proxy's chain_id
+      # and the chain itself. Local e2e Hardhat = 31337; the coston/coston2
+      # overrides set 16/114 for those networks.
+      - CHAIN_ID=${CHAIN_ID:-31337}
+      - INITIAL_OWNER=${INITIAL_OWNER:-0xF4E021377420Afe90c1A7D2b8968904946633a64}
+      # TEE governance the node signs with. Must match what set-governance
+      # registers on-chain (post-build reads the same vars). Defaults to the
+      # deployer (INITIAL_OWNER) as sole signer, threshold 1; override in .env.
+      - GOVERNANCE_SIGNERS=${GOVERNANCE_SIGNERS:-${INITIAL_OWNER:-0xF4E021377420Afe90c1A7D2b8968904946633a64}}
+      - GOVERNANCE_THRESHOLD=${GOVERNANCE_THRESHOLD:-1}
+      - PROXY_URL=http://ext-proxy:6663
+      - CONFIG_PORT=5501
+      - SIGN_PORT=7701
+      - EXTENSION_PORT=7702
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SIMULATED_TEE=${SIMULATED_TEE:-true}
+    depends_on:
+      - ext-proxy
+
+networks:
+  default:
+    name: ${COMPOSE_NETWORK:-docker_default}
+    external: true

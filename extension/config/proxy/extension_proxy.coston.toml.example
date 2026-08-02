@@ -1,0 +1,36 @@
+redis_port = ":6380"
+
+private_key_variable = ""
+initial_signing_policy_offset = 2
+signing_policy_fetch_interval = "20s"
+
+chain_id = 16
+
+[db]
+host = "<indexer-db-host>"
+port = 3306
+database = "<indexer-db-name>"
+username = "<indexer-db-user>"
+password = "<indexer-db-password>"
+log_queries = false
+
+[addresses]
+flare_systems_manager = "0x85680Dd93755Fe5d0789773fd0896cEE51F9e358"
+relay = "0x051f214D346Cfd97B107BECb87E2B35D1b4287E9"
+voter_registry = "0x42F4526BFC6f892DB515a832a52eFc9edFADf6c0"
+
+
+
+[ports]
+internal = "6663"
+external = "6664"
+
+
+[info_timing]
+cycle_internal = "10s"
+cycle_queue_response_wait ="2s"
+
+
+[voting]
+proposal_expiration = "12s"
+max_pending_request = 10000

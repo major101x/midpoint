@@ -1,0 +1,11 @@
+{
+  "name": "13-get-action-not-allowed",
+  "description": "GET /action is 405",
+  "request": {
+    "method": "GET",
+    "path": "/action"
+  },
+  "expect": {
+    "status": 405
+  }
+}

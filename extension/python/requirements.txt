@@ -1,0 +1,10 @@
+# Runtime dependencies. Versions are pinned exactly: this file is the
+# reproducibility anchor for the image build (see REPRODUCIBILITY.md).
+#
+# Every pin below must ship prebuilt manylinux wheels so nothing compiles at
+# image build time — that is what lets python/Dockerfile install with
+# --no-install-recommends and skip the ~300MB build toolchain.
+#
+# Only needed for ABI-encoded payloads (app/abi.py, used by SAY_GOODBYE).
+# An extension whose operations are all JSON needs no dependencies at all.
+eth-abi==5.2.0

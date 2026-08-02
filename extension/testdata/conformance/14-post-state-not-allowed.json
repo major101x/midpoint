@@ -1,0 +1,12 @@
+{
+  "name": "14-post-state-not-allowed",
+  "description": "POST /state is 405",
+  "request": {
+    "method": "POST",
+    "path": "/state",
+    "raw_body": ""
+  },
+  "expect": {
+    "status": 405
+  }
+}

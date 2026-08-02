@@ -1,0 +1,4 @@
+# Test-only dependencies. Never installed into the image — python/Dockerfile
+# installs requirements.txt only.
+-r requirements.txt
+pytest==8.3.4

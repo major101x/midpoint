@@ -1,0 +1,40 @@
+# Build context for python/Dockerfile is the repo root. BuildKit prefers this
+# file over the root .dockerignore because of the <dockerfile>.dockerignore name.
+.git
+.gitignore
+.env
+.env.*
+*.md
+docs/
+testing/
+.superpowers/
+.claude/
+cache/
+out/
+results/
+config/
+contracts/
+scripts/
+proxy/
+tools/
+testdata/
+docker/
+foundry.toml
+docker-compose*.yaml
+Dockerfile*
+.dockerignore
+
+# Other language implementations.
+go/
+typescript/
+
+# Local build artifacts that must never influence the image.
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.pytest_cache/
+**/dist/
+python/tests/
+python/requirements-dev.txt
+python/language.env

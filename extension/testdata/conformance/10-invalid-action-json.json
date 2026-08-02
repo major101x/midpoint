@@ -1,0 +1,12 @@
+{
+  "name": "10-invalid-action-json",
+  "description": "A body that is not JSON is 400",
+  "request": {
+    "method": "POST",
+    "path": "/action",
+    "raw_body": "not json at all"
+  },
+  "expect": {
+    "status": 400
+  }
+}

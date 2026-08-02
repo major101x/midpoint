@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+#
+# Start extension TEE node and proxy.
+#
+# By default, starts services via Docker Compose, picking the compose overlay
+# from --chain (or env CHAIN, or legacy LOCAL_MODE):
+#   --chain local    → docker-compose.yaml only (local devnet)
+#   --chain coston   → + docker-compose.coston.yaml
+#   --chain coston2  → + docker-compose.coston2.yaml
+#
+# Pass --local to start services as background Go processes instead of Docker.
+#
+# Usage:
+#   ./scripts/start-services.sh                       # local devnet, docker compose
+#   ./scripts/start-services.sh --chain coston        # Coston, docker compose
+#   ./scripts/start-services.sh --local               # local devnet, Go processes
+#
+# By default the node and proxy are built from PINNED module/image versions
+# (tee-node + tee-proxy), fully self-contained — no sibling repos required.
+# To build them from on-disk sibling checkouts instead (while developing
+# tee-node / tee-proxy), set USE_LOCAL_SIBLINGS=1:
+#   USE_LOCAL_SIBLINGS=1 ./scripts/start-services.sh --chain coston2
+#
+# Prerequisites:
+#   - Infrastructure running (Hardhat, indexer, Redis, normal TEE + proxy)
+#   - config/extension.env exists (created by pre-build.sh), OR EXTENSION_ID is set
+#   - Redis will be started on :6382 automatically (separate from infrastructure Redis)
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
+log()  { echo -e "${GREEN}[start-services]${NC} $*"; }
+die()  { echo -e "${RED}[start-services] ERROR:${NC} $*" >&2; exit 1; }
+
+# --- Parse flags ---
+USE_LOCAL=false
+CHAIN="${CHAIN:-}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --local) USE_LOCAL=true; shift ;;
+        --chain) [[ $# -ge 2 ]] || die "--chain requires a value (local|coston|coston2)"
+                 CHAIN="$2"; shift 2 ;;
+        --chain=*) CHAIN="${1#--chain=}"; shift ;;
+        *) die "Unknown argument: $1" ;;
+    esac
+done
+
+# --- Load .env from project root (if present) ---
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+fi
+
+# --- Load extension config ---
+CONFIG_FILE="$PROJECT_DIR/config/extension.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+fi
+
+EXTENSION_ID="${EXTENSION_ID:-}"
+PROXY_PRIVATE_KEY="${PROXY_PRIVATE_KEY:-983760a4ebf75b2ac3a93531168a0f225d01e5dc6e3568adbd46233ba1fb4fa4}"
+LOCAL_MODE="${LOCAL_MODE:-true}"
+
+# --- Resolve CHAIN (flag > env > legacy LOCAL_MODE) ---
+if [[ -z "$CHAIN" ]]; then
+    if [[ "$LOCAL_MODE" == "true" ]]; then
+        CHAIN="local"
+    else
+        CHAIN="coston2"  # legacy
+    fi
+fi
+case "$CHAIN" in
+    local|coston|coston2) ;;
+    *) die "Unknown --chain value: $CHAIN (valid: local, coston, coston2)" ;;
+esac
+
+[[ -n "$EXTENSION_ID" ]] || die "EXTENSION_ID not set. Run pre-build.sh first or set it manually."
+
+# --- Resolve LANGUAGE by directory convention ---------------------------------
+# Discovery is driven by <LANGUAGE>/language.env; there is deliberately no
+# hardcoded list here (see docs/extension-contract.md §8).
+# shellcheck source=lib/language.sh
+source "$SCRIPT_DIR/lib/language.sh"
+load_language "$PROJECT_DIR" || die "could not resolve LANGUAGE"
+
+# --- Derive dependency versions from the Go module pin ------------------------
+# Language images that build tee-node from source consume TEE_NODE_REF; see
+# scripts/lib/versions.sh for why a pseudo-version needs a SHA, not a tag.
+# shellcheck source=lib/versions.sh
+source "$SCRIPT_DIR/lib/versions.sh"
+load_versions "$PROJECT_DIR" || die "could not derive dependency versions"
+
+# --- Guard: --local runs Go binaries directly, so it is Go-only ---------------
+if [[ "$USE_LOCAL" == "true" && "$LANGUAGE" != "go" ]]; then
+    die "--local mode builds and runs Go binaries in-process and only supports LANGUAGE=go (got '$LANGUAGE').\n  Use Docker Compose mode instead: ./scripts/start-services.sh --chain $CHAIN"
+fi
+
+# --- Resolve local-siblings toggle ---
+case "${USE_LOCAL_SIBLINGS:-}" in
+    1|true|yes|on) USE_LOCAL_SIBLINGS=true ;;
+    *)             USE_LOCAL_SIBLINGS=false ;;
+esac
+
+# The sibling build compiles tee-node into the Go binary; other languages build
+# tee-node as a separate binary from a pinned ref and have no sibling path.
+if [[ "$USE_LOCAL_SIBLINGS" == "true" && "$LANGUAGE" != "go" ]]; then
+    die "USE_LOCAL_SIBLINGS is only supported for LANGUAGE=go (got '$LANGUAGE').\n  Other languages build tee-node from the pinned ref ($TEE_NODE_REF).\n  To test a local tee-node there, push it and update the pin in go/go.mod."
+fi
+
+log "Chain:          $CHAIN"
+log "Language:       $LANGUAGE ($EXTENSION_DOCKERFILE)"
+log "Extension ID:   $EXTENSION_ID"
+log "Local mode:     $LOCAL_MODE"
+log "Local siblings: $USE_LOCAL_SIBLINGS"
+log "tee-node ref:   $TEE_NODE_REF"
+
+# --- Manage go.work for host builds (git-ignored, fully managed here) ---
+# Toggle on: host `go` builds (e.g. --local mode) resolve the on-disk sibling
+# tee-node / tee-proxy. Toggle off: remove any stale go.work so host builds fall
+# back to the pinned module versions in go.mod / tools/go.mod.
+GOWORK_FILE="$PROJECT_DIR/go.work"
+if [[ "$USE_LOCAL_SIBLINGS" == "true" ]]; then
+    SIBLINGS_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
+    for sib in tee-node tee-proxy; do
+        [[ -d "$SIBLINGS_ROOT/$sib" ]] || die "USE_LOCAL_SIBLINGS set but $SIBLINGS_ROOT/$sib is missing.\n  Clone it into $SIBLINGS_ROOT/, or unset USE_LOCAL_SIBLINGS to use pinned modules."
+    done
+    log "Writing $GOWORK_FILE (host builds use sibling tee-node / tee-proxy)"
+    GO_VERSION=$(grep '^go ' "$PROJECT_DIR/go/go.mod" | awk '{print $2}')
+    cat > "$GOWORK_FILE" <<EOF
+// Generated by scripts/start-services.sh for USE_LOCAL_SIBLINGS (git-ignored).
+// Points host \`go\` builds at the on-disk sibling tee-node / tee-proxy checkouts.
+// Re-run start-services.sh without USE_LOCAL_SIBLINGS (or delete this file) to
+// return to the pinned module versions in go/go.mod / tools/go.mod.
+go $GO_VERSION
+
+use (
+	./go
+	./tools
+	../../tee-node
+	../../tee-proxy
+)
+EOF
+elif [[ -f "$GOWORK_FILE" ]]; then
+    log "Removing stale $GOWORK_FILE — host builds use pinned modules"
+    rm -f "$GOWORK_FILE" "$PROJECT_DIR/go.work.sum"
+fi
+
+# ============================================================
+# Docker Compose mode (default)
+# ============================================================
+if [[ "$USE_LOCAL" == "false" ]]; then
+    log "Starting services with Docker Compose..."
+
+    # Dockerfile expects SOURCE_DATE_EPOCH for reproducible builds — see REPRODUCIBILITY.md.
+    # Without it, `touch -h -d @${SOURCE_DATE_EPOCH}` in the builder stage fails with "invalid date format '@'".
+    if [[ -z "${SOURCE_DATE_EPOCH:-}" ]]; then
+        if SOURCE_DATE_EPOCH=$(git -C "$PROJECT_DIR" log -1 --format=%ct 2>/dev/null) && [[ -n "$SOURCE_DATE_EPOCH" ]]; then
+            export SOURCE_DATE_EPOCH
+        else
+            export SOURCE_DATE_EPOCH=0
+        fi
+    fi
+    log "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+
+    # --- Build the shared tee-node base image if this language needs it ---
+    # Two-process languages run a prebuilt tee-node `server` binary; the Go
+    # image links tee-node as a library and needs nothing here.
+    if grep -q 'tee-node-base' "$PROJECT_DIR/$EXTENSION_DOCKERFILE" 2>/dev/null; then
+        log "Language '$LANGUAGE' needs the shared tee-node base image"
+        "$SCRIPT_DIR/build-node-base.sh" || die "failed to build tee-node base image"
+    fi
+
+    # --- Build tee-proxy image locally if no remote registry is configured ---
+    if [[ -z "${REGISTRY:-}" ]]; then
+        if ! docker image inspect local/tee-proxy >/dev/null 2>&1; then
+            if [[ "$USE_LOCAL_SIBLINGS" == "true" ]]; then
+                # Dev build: use the on-disk sibling tee-proxy checkout.
+                TEE_PROXY_DIR="$SIBLINGS_ROOT/tee-proxy"
+                [[ -d "$TEE_PROXY_DIR" ]] || die "USE_LOCAL_SIBLINGS set but tee-proxy repo not present at $TEE_PROXY_DIR.\n  Clone it into $SIBLINGS_ROOT/, or unset USE_LOCAL_SIBLINGS to build the pinned proxy."
+                log "Building local/tee-proxy from sibling checkout $TEE_PROXY_DIR (USE_LOCAL_SIBLINGS)..."
+                docker build -f "$TEE_PROXY_DIR/Dockerfile" -t local/tee-proxy "$TEE_PROXY_DIR" || die "Failed to build tee-proxy image"
+            else
+                # Default: pinned, self-contained build from the in-repo Dockerfile
+                # (clones tee-proxy at the version in proxy/Dockerfile, matching tools/go.mod).
+                PROXY_DOCKERFILE="$PROJECT_DIR/proxy/Dockerfile"
+                [[ -f "$PROXY_DOCKERFILE" ]] || die "Image local/tee-proxy not found and proxy Dockerfile missing at $PROXY_DOCKERFILE.\n  Set REGISTRY in .env to pull from a remote registry, restore proxy/Dockerfile, or use USE_LOCAL_SIBLINGS=1 to build from a sibling checkout."
+                log "Building local/tee-proxy from $PROXY_DOCKERFILE (pinned, self-cloning)..."
+                docker build -f "$PROXY_DOCKERFILE" -t local/tee-proxy "$PROJECT_DIR/proxy" || die "Failed to build tee-proxy image"
+            fi
+            log "local/tee-proxy image built successfully"
+        else
+            log "local/tee-proxy image already exists (use 'docker rmi local/tee-proxy' to force rebuild)"
+        fi
+    fi
+
+    COMPOSE_FILES=("-f" "$PROJECT_DIR/docker-compose.yaml")
+
+    # Toggle: swap the pinned self-contained node build for the sibling-based one.
+    if [[ "$USE_LOCAL_SIBLINGS" == "true" ]]; then
+        log "USE_LOCAL_SIBLINGS — node built from on-disk tee-node via Dockerfile.siblings"
+        COMPOSE_FILES+=("-f" "$PROJECT_DIR/docker-compose.siblings.yaml")
+    fi
+
+    case "$CHAIN" in
+        local) ;;
+        coston)
+            log "Coston mode — attaching docker-compose.coston.yaml"
+            COMPOSE_FILES+=("-f" "$PROJECT_DIR/docker-compose.coston.yaml")
+            ;;
+        coston2)
+            log "Coston2 mode — attaching docker-compose.coston2.yaml"
+            COMPOSE_FILES+=("-f" "$PROJECT_DIR/docker-compose.coston2.yaml")
+            ;;
+    esac
+
+    docker compose "${COMPOSE_FILES[@]}" up -d --build || die "docker compose up failed"
+
+    # Wait for proxy to be ready
+    E2E="$SCRIPT_DIR/e2e.sh"
+    EXT_PROXY_URL="${EXT_PROXY_URL:-http://localhost:6674}"
+    log "Waiting for extension proxy at $EXT_PROXY_URL/info ..."
+    "$E2E" wait-for-url "$EXT_PROXY_URL/info" 120
+
+    # Validate EXTENSION_ID is recognized by proxy
+    log "Validating EXTENSION_ID against proxy..."
+    PROXY_INFO=$(curl -sf "$EXT_PROXY_URL/info" 2>/dev/null || true)
+    if [[ -n "$PROXY_INFO" ]]; then
+        if ! echo "$PROXY_INFO" | grep -q "$EXTENSION_ID" 2>/dev/null; then
+            echo -e "${RED}WARNING: EXTENSION_ID $EXTENSION_ID not found in proxy /info response${NC}" >&2
+            echo -e "${RED}The proxy may be filtering for a different extension. Check config.${NC}" >&2
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN} Services started (Docker Compose)${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "${CYAN}Mode${NC}"
+    case "$CHAIN" in
+        local)   echo "  Local devnet" ;;
+        coston)  echo "  Coston testnet (chain_id=16)" ;;
+        coston2) echo "  Coston2 testnet (chain_id=114)" ;;
+    esac
+    echo ""
+    echo -e "${CYAN}Services${NC}"
+    echo "  redis, ext-proxy, extension-tee"
+    echo "  Proxy URL: $EXT_PROXY_URL"
+    echo ""
+    echo -e "${CYAN}Commands${NC}"
+    echo "  Logs:    docker compose ${COMPOSE_FILES[*]} logs -f"
+    echo "  Stop:    ./scripts/stop-services.sh --chain $CHAIN"
+    exit 0
+fi
+
+# ============================================================
+# Local Go process mode (--local)
+# ============================================================
+log "Starting services as local Go processes (--local)..."
+
+E2E="$SCRIPT_DIR/e2e.sh"
+PID_DIR="$PROJECT_DIR/out/pids"
+LOG_DIR="$PROJECT_DIR/out/logs"
+
+# --- Build Go binaries (once) so we run the actual binary, not `go run` ---
+BIN_DIR="$PROJECT_DIR/out/bin"
+mkdir -p "$BIN_DIR"
+log "Building Go binaries..."
+# start-tee links the Go extension in-process, so it lives in the extension
+# module; start-proxy is deployment tooling and lives in tools/.
+cd "$EXTENSION_DIR"
+go build -o "$BIN_DIR/start-tee" ./cmd/start-tee
+cd "$PROJECT_DIR/tools"
+go build -o "$BIN_DIR/start-proxy" ./cmd/start-proxy
+
+# --- Start extension TEE ---
+log "Starting extension TEE node..."
+EXTENSION_ID="$EXTENSION_ID" "$E2E" start ext-tee "$PID_DIR/ext-tee.pid" "$LOG_DIR/ext-tee.log" \
+    "$BIN_DIR/start-tee" -extensionID "$EXTENSION_ID"
+
+log "Waiting for extension TEE to initialize..."
+sleep 5
+
+# --- Start extension Redis on port 6382 via Docker Compose ---
+log "Starting Redis via Docker Compose..."
+docker compose -f "$PROJECT_DIR/docker-compose.yaml" up -d redis
+log "Waiting for Redis on :6382..."
+retries=0
+while ! docker compose -f "$PROJECT_DIR/docker-compose.yaml" exec -T redis redis-cli ping > /dev/null 2>&1; do
+    retries=$((retries + 1))
+    if [ $retries -ge 15 ]; then
+        die "Redis container failed to become healthy"
+    fi
+    sleep 1
+done
+log "Redis on :6382 ready"
+
+# --- Start extension proxy ---
+log "Starting extension proxy..."
+PROXY_PRIVATE_KEY="$PROXY_PRIVATE_KEY" "$E2E" start ext-proxy "$PID_DIR/ext-proxy.pid" "$LOG_DIR/ext-proxy.log" \
+    "$BIN_DIR/start-proxy"
+
+cd "$PROJECT_DIR"
+
+# --- Wait for proxy to be ready ---
+if [[ "$EXT_PROXY_URL" != *"localhost"* && "$EXT_PROXY_URL" != *"127.0.0.1"* ]]; then
+    log "NOTE: EXT_PROXY_URL=$EXT_PROXY_URL (not localhost) — health check targets this URL"
+fi
+log "Waiting for extension proxy..."
+"$E2E" wait-for-url "http://localhost:6664/info" 60
+
+# --- Summary ---
+EXT_TEE_PID=$(cat "$PID_DIR/ext-tee.pid" 2>/dev/null || echo "?")
+EXT_PROXY_PID=$(cat "$PID_DIR/ext-proxy.pid" 2>/dev/null || echo "?")
+
+echo ""
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN} Services started (local Go processes)${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+echo -e "${CYAN}Processes${NC}"
+echo "  Extension Redis  Docker container (port 6382)"
+echo "  Extension TEE    PID $EXT_TEE_PID"
+echo "  Extension Proxy  PID $EXT_PROXY_PID"
+echo "  Proxy URL        http://localhost:6664"
+echo ""
+echo -e "${CYAN}Logs${NC}"
+echo "  Redis log        docker compose logs redis"
+echo "  TEE log          $LOG_DIR/ext-tee.log"
+echo "  Proxy log        $LOG_DIR/ext-proxy.log"
+echo ""
+echo -e "${CYAN}Commands${NC}"
+echo "  Status:  $SCRIPT_DIR/e2e.sh status $PID_DIR"
+echo "  Stop:    $SCRIPT_DIR/stop-services.sh --local"

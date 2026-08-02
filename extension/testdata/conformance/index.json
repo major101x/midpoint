@@ -1,0 +1,20 @@
+{
+  "fixtures": [
+    "01-say-hello-success",
+    "02-say-hello-counter-increments",
+    "03-say-hello-empty-name",
+    "04-say-hello-malformed-payload",
+    "05-say-goodbye-success",
+    "06-say-goodbye-empty-reason-allowed",
+    "07-say-goodbye-rejects-json",
+    "08-unknown-op-type",
+    "09-unknown-op-command",
+    "10-invalid-action-json",
+    "11-invalid-hex-in-message",
+    "12-message-not-datafixed",
+    "13-get-action-not-allowed",
+    "14-post-state-not-allowed",
+    "15-unknown-path",
+    "16-get-state"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "11-invalid-hex-in-message",
+  "description": "A non-hex data.message is 400",
+  "request": {
+    "method": "POST",
+    "path": "/action",
+    "body": {
+      "data": {
+        "id": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "type": "instruction",
+        "submissionTag": "submit",
+        "message": "0xZZZZ"
+      }
+    }
+  },
+  "expect": {
+    "status": 400
+  }
+}
