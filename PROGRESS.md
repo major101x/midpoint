@@ -201,6 +201,23 @@ is good at: running the enclave.
 - Instruction fee is `1000000` wei, taken from `tools/pkg/utils/instructions.go`. Sending zero reverts.
 - Registering a new instructions sender mints a **new** extension id, which then needs `config/extension.env` updated, the container restarted, and `post-build.sh` re-run. The TEE machine address changes again each time.
 
+### Repo layout
+
+The Flare scaffold was forked into `extension/` so the confidential-compute half
+of the product lives in this repo rather than in an untracked directory. Done as
+two commits on purpose:
+
+1. `vendor: fce-extension-scaffold at f48cafb` contains upstream unmodified. None of it is our work.
+2. Everything after it is ours, so our enclave changes read as a reviewable diff against a known baseline.
+
+Secrets stay out: `.env*`, `config/extension.env` and
+`config/proxy/extension_proxy.coston2*.toml` are all covered by the scaffold's
+own `.gitignore`, and the staged tree was grepped for the indexer credentials and
+the deployer private key before committing. Both clean.
+
+Note: the docker compose project name derives from the directory, so the next
+rebuild replaces the `fce-extension-scaffold-*` containers with `extension-*`.
+
 ### Next
 
 Day 6: decrypt inside the enclave. Needs the ECIES format the sign port's
