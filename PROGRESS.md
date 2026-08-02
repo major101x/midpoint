@@ -218,7 +218,88 @@ the deployer private key before committing. Both clean.
 Note: the docker compose project name derives from the directory, so the next
 rebuild replaces the `fce-extension-scaffold-*` containers with `extension-*`.
 
+---
+
+## Day 6, 2026-08-02: sealed orders decrypting inside the enclave
+
+**Verified live on Coston2.** An order sealed by `client/`, submitted on chain as
+opaque bytes, was decrypted and accepted inside the TEE:
+
+```
+routing action with OPType, OPCommand: SEALED, SUBMIT_ORDER
+opType=SEALED opCommand=SUBMIT_ORDER status=1
+handler response: {"batchId":"2","accepted":true,"ordersInBatch":1}
+enclave /state:   {"openBatches":1,"openOrders":1,"lastClearedBatch":"0","lastClearingPrice":"0"}
+```
+
+That `/state` line is the product working. One order is resting in the book, and
+nothing about its side, price, size or owner is visible from outside the enclave.
+
+### The encryption scheme
+
+Determined by reading tee-node rather than guessing: it calls
+`ecies.Decrypt(ciphertext, nil, nil)` with go-ethereum's defaults
+(ECIES_AES128_SHA256). **The common JavaScript ECIES libraries are not
+wire-compatible with this.** `eciesjs` defaults to AES-256-GCM; `eth-crypto` and
+`eccrypto` use AES-256-CBC with a SHA-512 KDF. Either produces ciphertext the
+enclave silently refuses.
+
+Implemented directly in `client/src/ecies.ts` against geth's layout:
+
+```
+R(65) || IV(16) || AES-128-CTR ciphertext || HMAC-SHA256(32)
+Ke = K[0:16], Km = SHA256(K[16:32]),  K = concatKDF(ECDH_x, 32)   NIST SP 800-56
+```
+
+Pinned by a round-trip test, a wire-layout test, and a live probe against the
+running enclave.
+
+### Q1 revised: the TEE signs with its own identity key
+
+Reading the sign port turned up `POST /sign`, which the scaffold does not wrap
+and the docs do not mention. It computes
+`crypto.Sign(accounts.TextHash(keccak256(message)), teePrivateKey)`, so it is a
+plain EIP-191 signature from the **TEE identity key**, whose address is the
+registered machine id.
+
+Verified: signing a probe string inside the enclave and recovering it gave
+`0x2fd46e88...5a86`, exactly the registered machine. Settlement therefore needs no
+key management at all, and should require the signer to equal the `batchTee`
+already pinned by OrderBook. See `spec.md` §7 Q1. The day 3 failure was specific
+to the `ActionResult` path, which wraps its digest in a domain-separated payload
+that `/sign` does not have.
+
+### Replay protection is now enforced
+
+The enclave rejects an order unless the `trader` and `batchId` inside the
+ciphertext match the ones OrderBook took from `msg.sender`. Tested as adversarial
+scenarios: a ciphertext lifted from a public transaction and submitted by someone
+else, and the same ciphertext replayed into a later batch.
+
+Handler error strings are deliberately terse. They surface in action results
+readable through the proxy, so a validation message must never carry a price or
+size. There is a test asserting exactly that.
+
+### The ephemeral-key hazard, hit for real
+
+Rebuilding the enclave changed the TEE machine from `0x2Fd46E88...5A86` to
+`0xC52c42dB...9407`, while `OrderBook.batchTee` was still pinned to the dead one.
+Batch 1 could not be settled, only voided: `closeBatch` then `advanceBatch`, which
+is exactly the "a batch spanning an enclave restart must be voidable" rule the
+spec records. Good to have exercised the recovery path before it mattered.
+
+### Environment notes
+
+1. **The container rename bit.** Forking the scaffold to `extension/` changed the compose project name, so the new `extension-*` containers collided with the old `fce-extension-scaffold-*` ones on port 6382. Worse, a half-created `extension-redis-1` was left attached to **no network**, so the proxy panicked with `lookup redis: no such host`. Fix: remove the old containers and the stale network, then start clean.
+2. `@noble/ciphers` was resolving as a transitive dependency only. Declared explicitly, since a dependency bump would otherwise break encryption silently.
+
+### Test counts
+
+- Solidity: 44 offline, 3 forked.
+- Extension: 61.
+- Client: 13.
+
 ### Next
 
-Day 6: decrypt inside the enclave. Needs the ECIES format the sign port's
-`/decrypt` expects to be determined, then the inner-trader equality check.
+Day 7: uniform-price clearing over the decrypted book, unit-tested off chain,
+then sign the settlement payload with `POST /sign`.
