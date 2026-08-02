@@ -1,4 +1,4 @@
-/** Server routing and wire format — docs/extension-contract.md §2, §4. */
+/** Server routing and wire format: docs/extension-contract.md §2, §4. */
 
 import { encodeAbiParameters } from "viem";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -234,7 +234,7 @@ describe("ActionResult wire format", () => {
 
 describe("state wire format", () => {
   it("sends stateVersion as bytes32", async () => {
-    // Asymmetric with ActionResult.version by design — contract §4.5.
+    // Asymmetric with ActionResult.version by design, contract §4.5.
     const [status, body] = await srv.handleRequest("GET", "/state", "");
     const r = body as Record<string, unknown>;
 
