@@ -65,6 +65,7 @@ const SETTLEMENT_PARAMS = [
       {name: "trader", type: "address"},
       {name: "side", type: "uint8"},
       {name: "size", type: "uint256"},
+      {name: "quote", type: "uint256"},
     ],
   },
 ] as const;
@@ -73,6 +74,7 @@ export interface EncodableFill {
   trader: `0x${string}`;
   side: 0 | 1;
   size: bigint;
+  quote: bigint;
 }
 
 export function encodeSettlement(

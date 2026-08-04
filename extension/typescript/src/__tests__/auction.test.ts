@@ -187,6 +187,36 @@ describe("determinism", () => {
   });
 });
 
+describe("quote conservation", () => {
+  /**
+   * The reason quote is computed in the enclave rather than per fill on chain.
+   * Here the buy side has three fills and the sell side one, so flooring each
+   * fill separately would make the two totals disagree and settlement would
+   * revert. Exact allocation makes them equal by construction.
+   */
+  it("nets to zero even when the two sides have different fill counts", () => {
+    const r = clear([
+      order("BUY", 1_064_001n, 333_333n, "0xb1"),
+      order("BUY", 1_064_001n, 333_333n, "0xb2"),
+      order("BUY", 1_064_001n, 333_334n, "0xb3"),
+      order("SELL", 1_000_001n, 1_000_000n, "0xs1"),
+    ])!;
+
+    const buyQuote = r.fills.filter((f) => f.side === "BUY").reduce((a, f) => a + f.quote, 0n);
+    const sellQuote = r.fills.filter((f) => f.side === "SELL").reduce((a, f) => a + f.quote, 0n);
+    expect(buyQuote).toBe(sellQuote);
+    expect(buyQuote).toBe(quoteAmount(r.volume, r.clearingPrice));
+  });
+
+  it("gives every filled order a positive quote", () => {
+    const r = clear([
+      order("BUY", 1_100_000n, 5_000_000n),
+      order("SELL", 1_000_000n, 5_000_000n),
+    ])!;
+    for (const f of r.fills) expect(f.quote).toBeGreaterThan(0n);
+  });
+});
+
 describe("quoteAmount", () => {
   it("converts base units to quote units at 6 decimals", () => {
     // 2 FXRP at $1.064 is 2.128 USDT0.
@@ -268,9 +298,13 @@ describe("properties over random books", () => {
       // Maximises volume, matching the independent brute force.
       expect(r.volume, `seed ${seed}: suboptimal volume`).toBe(expected);
 
-      // Conservation on both sides.
+      // Conservation on both sides, base and quote.
       expect(totalFor(r.fills, "BUY"), `seed ${seed}: buy side`).toBe(r.volume);
       expect(totalFor(r.fills, "SELL"), `seed ${seed}: sell side`).toBe(r.volume);
+
+      const bq = r.fills.filter((f) => f.side === "BUY").reduce((a, f) => a + f.quote, 0n);
+      const sq = r.fills.filter((f) => f.side === "SELL").reduce((a, f) => a + f.quote, 0n);
+      expect(bq, `seed ${seed}: quote legs disagree`).toBe(sq);
 
       // Nobody trades on terms they did not offer.
       for (const f of r.fills) {

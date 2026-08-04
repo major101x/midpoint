@@ -166,6 +166,7 @@ export async function handleRunMatch(msg: string): Promise<HandlerResult> {
     trader: f.trader as `0x${string}`,
     side: f.side === "BUY" ? 0 : 1,
     size: f.size,
+    quote: f.quote,
   }));
 
   const payload = encodeSettlement(batchId, clearingPrice, fills);

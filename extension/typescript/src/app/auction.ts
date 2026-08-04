@@ -35,6 +35,18 @@ export interface Fill {
   side: Side;
   /** Base units transacted. Always positive. */
   size: bigint;
+  /**
+   * Quote units this fill pays (BUY) or receives (SELL).
+   *
+   * Computed here, not on chain, and NOT simply floor(size * price / SCALE) per
+   * fill. Both sides trade the same total base, but flooring each fill
+   * separately makes the two quote totals diverge whenever one side has more
+   * fills than the other, which would leave settlement a few units short and
+   * revert the batch. Instead the total quote is computed once from the total
+   * volume and then split across each side exactly, so both sides sum to the
+   * same number by construction.
+   */
+  quote: bigint;
 }
 
 export interface ClearingResult {
@@ -99,9 +111,10 @@ export function clear(orders: readonly RestingOrder[]): ClearingResult | null {
   // towards the buyer by at most one unit; documented rather than hidden.
   const clearingPrice = (tied[0]! + tied[tied.length - 1]!) / 2n;
 
+  const totalQuote = quoteAmount(bestVolume, clearingPrice);
   const fills = [
-    ...allocate(bids, clearingPrice, bestVolume, "BUY"),
-    ...allocate(asks, clearingPrice, bestVolume, "SELL"),
+    ...withQuote(allocate(bids, clearingPrice, bestVolume, "BUY"), totalQuote),
+    ...withQuote(allocate(asks, clearingPrice, bestVolume, "SELL"), totalQuote),
   ];
 
   return { clearingPrice, volume: bestVolume, fills };
@@ -142,7 +155,7 @@ function allocate(
 
     const levelTotal = sum(level);
     if (levelTotal <= remaining) {
-      for (const o of level) fills.push({ trader: o.trader, side: which, size: o.size });
+      for (const o of level) fills.push({ trader: o.trader, side: which, size: o.size, quote: 0n });
       remaining -= levelTotal;
     } else {
       for (const f of prorate(level, remaining, which)) fills.push(f);
@@ -190,8 +203,42 @@ function prorate(level: readonly RestingOrder[], amount: bigint, which: Side): F
       trader: p.o.trader,
       side: which,
       size: p.base + (extra.get(p.i) ?? 0n),
+      quote: 0n,
     }))
     .filter((f) => f.size > 0n);
+}
+
+/**
+ * Split `totalQuote` across one side's fills in proportion to size, exactly.
+ *
+ * Same remainder rule as `prorate`: floor first, then hand out the shortfall to
+ * the largest fractional entitlements, ties broken by index for determinism.
+ * The result sums to `totalQuote` on both sides, which is what lets settlement
+ * insist the quote legs net to zero.
+ */
+function withQuote(fills: Fill[], totalQuote: bigint): Fill[] {
+  const totalSize = fills.reduce((a, f) => a + f.size, 0n);
+  if (totalSize === 0n) return fills;
+
+  const parts = fills.map((f, i) => {
+    const numerator = f.size * totalQuote;
+    return { f, i, base: numerator / totalSize, remainder: numerator % totalSize };
+  });
+
+  let allocated = parts.reduce((acc, p) => acc + p.base, 0n);
+  const order = [...parts].sort((a, b) => {
+    const cmp = compare(b.remainder, a.remainder);
+    return cmp !== 0 ? cmp : a.i - b.i;
+  });
+
+  const extra = new Map<number, bigint>();
+  for (const p of order) {
+    if (allocated >= totalQuote) break;
+    extra.set(p.i, (extra.get(p.i) ?? 0n) + 1n);
+    allocated += 1n;
+  }
+
+  return parts.map((p) => ({ ...p.f, quote: p.base + (extra.get(p.i) ?? 0n) }));
 }
 
 function sum(orders: readonly RestingOrder[]): bigint {

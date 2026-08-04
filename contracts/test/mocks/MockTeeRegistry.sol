@@ -22,6 +22,24 @@ contract RotatingMachineRegistry is ITeeMachineRegistry {
     }
 }
 
+/// @notice Registry that always returns one fixed machine.
+/// @dev Used where the test needs a known enclave identity to sign as, rather
+/// than the adversarial rotation used to prove pinning.
+contract PinnedMachineRegistry is ITeeMachineRegistry {
+    address public immutable MACHINE;
+
+    constructor(address machine) {
+        MACHINE = machine;
+    }
+
+    function getRandomTeeIds(uint256, uint256 count) external view returns (address[] memory ids) {
+        ids = new address[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            ids[i] = MACHINE;
+        }
+    }
+}
+
 /// @notice Registry with no machines available.
 contract EmptyMachineRegistry is ITeeMachineRegistry {
     function getRandomTeeIds(uint256, uint256) external pure returns (address[] memory ids) {
