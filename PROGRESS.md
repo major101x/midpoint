@@ -380,10 +380,67 @@ The enclave encodes the payload with viem and Solidity decodes it, and the signa
 - The FTSO reading is rescaled from the feed's own `decimals` rather than assuming 6. The field exists because it can change, and assuming would misprice by orders of magnitude.
 - `IFtsoV2.getFeedById` is declared `view`, matching Coston2. Flare's production interface marks the equivalent payable so a fee can be charged; if that ever applies, Settlement needs revisiting.
 
+---
+
+## Day 9, 2026-08-04: ★ FIRST SEALED BATCH SETTLED ON COSTON2
+
+The milestone the whole plan was built around. Orders sealed client side,
+submitted on chain as opaque bytes, decrypted and cleared inside the enclave,
+signed with the TEE identity key, relayed, and settled after four on-chain checks.
+
+```
+batch 1   clearing price 1.065000   volume 4.000000 FXRP
+settle tx 0xa827f1710adb808965dedbc66fa61cb7a2d13b28ba3b311f2cfeccd212bbd043
+
+maker  FXRP 4.000000 -> 0.000000   USDT0 0.000000 -> 4.260000
+taker  FXRP 0.000000 -> 4.000000   USDT0 5.000000 -> 0.740000
+conserved: base true, quote true
+```
+
+4 FXRP at 1.065 is 4.26 USDT0 exactly. Nobody outside the enclave ever saw a
+side, a limit price or an order size.
+
+### Live deployment (current)
+
+| Thing | Address |
+|---|---|
+| Vault | `0x5713888cC2AD639000872f2b8282D68B425b3cC2` |
+| OrderBook | `0xeB37fDA0f90AC634cb43DfDcF8080851087ca3E4` |
+| Settlement | `0x9Ca8a93c86C60D732113155184E40DBe2958cEE4` |
+| Extension ID | `0x10196` (65942) |
+| TEE machine | `0x2C0e95a9D3C98acEb0646E45F678572698ad2998` |
+| Maker (demo) | `0xE9217204186e6b3D3d8e5109a7dD8a9D45B5F0BD` |
+| Taker (demo) | `0x1206a2Bf6375B1446c53Ea5Ed5766e85917c1d5c` |
+
+Supersedes every earlier deployment. The previous `OrderBook`
+(`0xb4c2...698b`) predates `voidBatch` and has a batch stranded behind a paused
+enclave; it is dead and must not be referenced.
+
+### OPEN GAP found by running it: the enclave cannot see vault balances
+
+The first settlement attempt reverted with `Vault.InsufficientBalance`. The
+maker had sold 4 FXRP across two runs while holding only 3 in the vault.
+
+This is a real design gap, not a demo artifact. **The enclave clears orders
+without knowing whether traders can honour them**, so it can sign a perfectly
+valid settlement that the vault cannot execute. The whole batch then reverts and
+every trader in it waits for `voidBatch`.
+
+The fix is cheap and leaks nothing: **vault balances are already public on
+chain**, so `OrderBook` can include the submitter's current base and quote
+balance in the envelope it sends to the enclave, and the enclave can reject or
+cap an order that exceeds what the trader can cover. No new information is
+revealed, because anyone can already read those balances.
+
+Recorded rather than rushed. It needs a contract change, a redeploy, a new
+extension id and an enclave rebuild, so it is the first task of day 10.
+
+### Notes
+
+- A brand new extension id starts with exactly one active TEE machine, confirmed with `getActiveTeeMachines`. The zombie-machine problem from day 7 only accumulates within one extension.
+- `closeBatch` correctly refused to run instantly with `BatchTooYoung`. The demo now waits out the window rather than assuming.
+- Demo traders are funded by transferring from the deployer rather than the faucet, since the faucet is limited to one address per 24 hours.
+
 ### Next
 
-Day 9, the milestone that matters: deploy Vault, OrderBook and Settlement
-together, run a relayer that polls the proxy for the signed payload, and settle
-a real sealed batch on Coston2. Note the currently deployed OrderBook predates
-`voidBatch` and has a batch stranded behind a paused enclave, so it is replaced
-rather than reused.
+Day 10: close the balance gap above, then the frontend.
