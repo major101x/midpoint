@@ -441,6 +441,70 @@ extension id and an enclave rebuild, so it is the first task of day 10.
 - `closeBatch` correctly refused to run instantly with `BatchTooYoung`. The demo now waits out the window rather than assuming.
 - Demo traders are funded by transferring from the deployer rather than the faucet, since the faucet is limited to one address per 24 hours.
 
+---
+
+## Day 10, 2026-08-04: collateral guard, and a second clean settlement
+
+**76 Solidity tests, 93 extension, 13 client.**
+
+The balance gap from day 9 is closed. `OrderBook` now reads the submitter's vault
+balances on chain and sends them with the order; the enclave reserves against
+them cumulatively per trader per batch and rejects anything the balance cannot
+cover.
+
+Proven live. The maker held 1 FXRP and tried to sell 5:
+
+```
+vault base balance: 1.000000 FXRP
+submitting SELL of 5.000000 FXRP, which the balance cannot cover
+on chain: accepted (the chain cannot see the size)
+enclave verdict: status=0  log="error: order exceeds available base balance"
+```
+
+That contrast is the design in one screen. The chain **cannot** police the order,
+because it cannot see it, which is the entire point of the venue. So the enclave
+polices it, using public balances the chain passes in. Sending them leaks
+nothing: anyone can already read vault balances directly.
+
+Reservations are conservative. A sell commits its size in base. A buy commits
+`size * limitPrice` in quote, an upper bound, because buyers pay the clearing
+price and that is never worse than their own limit.
+
+### Second settled batch, on the fixed deployment
+
+```
+batch 1   clearing price 1.065000   volume 2.000000 FXRP
+maker  FXRP 3.000000 -> 1.000000   USDT0 0.000000 -> 2.130000
+taker  FXRP 0.000000 -> 2.000000   USDT0 4.000000 -> 1.870000
+conserved: base true, quote true
+```
+
+### Live deployment (current)
+
+| Thing | Address |
+|---|---|
+| Vault | `0x38F182C65415C9bBCA03420E256E8A9E957B72b2` |
+| OrderBook | `0xDC1F76dD480EE9A3B4383a29a1C956E11E5326d4` |
+| Settlement | `0xd064e426F10a8DC00E9892722c468C8A41e9Cb45` |
+| Extension ID | `0x10198` (65944) |
+| TEE machine | `0x02a2Dd00685F76F93185F1E59359863F8BdCF9C7` |
+
+Supersedes the day 9 deployment (`0x5713...`, `0xeB37...`, `0x9Ca8...`).
+
+### Known behaviour worth stating
+
+`OrderBook.orderCount` counts **submissions, not acceptances**, because the chain
+cannot tell whether the enclave accepted an order without being told what was in
+it. So a batch can show orders on chain while the enclave's book holds fewer. If
+every order in a batch is rejected, `RUN_MATCH` returns "no orders for batch" and
+the batch needs `voidBatch`. That is the correct trade: the alternative leaks
+which orders were valid.
+
+### Notes
+
+- A redeploy strands balances in the previous vault. Traders must withdraw and re-deposit; the demo now deposits what a wallet actually holds rather than a fixed amount, so it survives that.
+- After a settled batch the roles naturally invert: the seller is holding quote and the buyer is holding base.
+
 ### Next
 
-Day 10: close the balance gap above, then the frontend.
+Frontend, then the naive-AMM comparison demo, then the video and submission.

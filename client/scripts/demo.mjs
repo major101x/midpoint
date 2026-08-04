@@ -96,23 +96,26 @@ async function main() {
   // that someone is a participant, never what they intend to trade.
   log("\n1. deposits");
   // Idempotent, so the demo can be re-run without exhausting a trader's wallet.
-  const makerBase0 = await pub.readContract({ address: VAULT, abi: vaultAbi, functionName: "baseBalanceOf", args: [maker.account.address] });
-  if (makerBase0 < 2_000_000n) {
-    await send(maker, { address: FXRP, abi: erc20, functionName: "approve", args: [VAULT, 3_000_000n] });
-    await send(maker, { address: VAULT, abi: vaultAbi, functionName: "deposit", args: [true, 3_000_000n] });
-    log("   maker deposited 3.000000 FXRP");
-  } else {
-    log(`   maker already holds ${fmt(makerBase0)} FXRP in the vault`);
+  // Deposit whatever the wallet actually holds, capped at what the demo needs.
+  // Robust across repeat runs and across a redeploy, where balances are stranded
+  // in the previous vault until withdrawn.
+  async function topUp(client, token, isBase, want, label) {
+    const fn = isBase ? "baseBalanceOf" : "quoteBalanceOf";
+    const inVault = await pub.readContract({ address: VAULT, abi: vaultAbi, functionName: fn, args: [client.account.address] });
+    if (inVault >= want) {
+      log(`   ${label} already holds ${fmt(inVault)} in the vault`);
+      return;
+    }
+    const inWallet = await pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [client.account.address] });
+    const amount = inWallet < want - inVault ? inWallet : want - inVault;
+    if (amount === 0n) throw new Error(`${label} has nothing left to deposit`);
+    await send(client, { address: token, abi: erc20, functionName: "approve", args: [VAULT, amount] });
+    await send(client, { address: VAULT, abi: vaultAbi, functionName: "deposit", args: [isBase, amount] });
+    log(`   ${label} deposited ${fmt(amount)}`);
   }
 
-  const takerQuote0 = await pub.readContract({ address: VAULT, abi: vaultAbi, functionName: "quoteBalanceOf", args: [taker.account.address] });
-  if (takerQuote0 < 3_000_000n) {
-    await send(taker, { address: USDT0, abi: erc20, functionName: "approve", args: [VAULT, 5_000_000n] });
-    await send(taker, { address: VAULT, abi: vaultAbi, functionName: "deposit", args: [false, 5_000_000n] });
-    log("   taker deposited 5.000000 USDT0");
-  } else {
-    log(`   taker already holds ${fmt(takerQuote0)} USDT0 in the vault`);
-  }
+  await topUp(maker, FXRP, true, 3_000_000n, "maker (FXRP)");
+  await topUp(taker, USDT0, false, 4_000_000n, "taker (USDT0)");
 
   const before = {
     makerBase: await pub.readContract({ address: VAULT, abi: vaultAbi, functionName: "baseBalanceOf", args: [maker.account.address] }),
