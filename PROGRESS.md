@@ -299,7 +299,59 @@ spec records. Good to have exercised the recovery path before it mattered.
 - Extension: 61.
 - Client: 13.
 
+---
+
+## Day 7, 2026-08-02: clearing engine and signed settlement payloads
+
+`extension/typescript/src/app/auction.ts`. **80 extension tests, 13 client, 44
+Solidity plus 3 forked.**
+
+### The mechanism, as implemented
+
+1. Choose `p*` to maximise executed volume.
+2. Break ties by minimising imbalance, `|demand - supply|`.
+3. Break remaining ties by taking the midpoint of the tied range, so the surplus is split rather than handed to one side.
+
+Allocation respects price priority: an order offering strictly better terms than
+`p*` fills before one that only just qualifies. Orders sitting exactly at `p*` are
+**rationed pro-rata, never by arrival**. Rationing by arrival would rebuild the
+queue race the venue exists to remove, which would be a subtle way to undo the
+whole design.
+
+### Why the tests look the way they do
+
+A wrong clearing price does not crash. It moves the wrong amount of money and
+looks fine. So correctness is argued two ways:
+
+- **Property test over 400 random books**, each checked against an independent brute-force optimum, plus conservation, no overfill, and nobody trading outside their limit. Deterministic PRNG, so any failure is reproducible from its seed.
+- **Mutation check.** Removing the pro-rata remainder distribution fails two tests. All arithmetic is integer, and settlement requires both sides to net to zero, so a lost remainder unit would revert an entire batch.
+
+### Signing
+
+`RUN_MATCH` now ABI-encodes `(batchId, clearingPrice, Fill[])`, signs it through
+the sign port's `POST /sign`, and returns payload plus signature. The signer is
+the TEE identity key, so no key is generated, distributed or stored anywhere.
+`Settlement.sol` will rebuild the same digest:
+
+```solidity
+bytes32 inner  = keccak256(payload);
+bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", inner));
+require(ecrecover(digest, v, r, s) == batchTee);
+```
+
+### A bug worth recording
+
+The first version of `handleRunMatch` deleted the book **before** signing, so an
+unreachable sign port would have destroyed the batch with no way to retry or
+void it, contradicting the comment sitting immediately below it. Now the book is
+consumed only once a signature exists, with a regression test that fails signing,
+asserts the orders survive, then retries successfully.
+
+A batch that does not cross still clears, as an empty settlement, so traders'
+funds unfreeze promptly rather than waiting for a batch that will never fill.
+
 ### Next
 
-Day 7: uniform-price clearing over the decrypted book, unit-tested off chain,
-then sign the settlement payload with `POST /sign`.
+Day 8: `Settlement.sol`. Verify the EIP-191 digest against `batchTee`, enforce
+replay protection on `batchId`, check the clearing price against the FTSO band,
+and require fills to net to zero before moving vault balances.
