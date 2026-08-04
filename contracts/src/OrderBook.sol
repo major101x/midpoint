@@ -60,6 +60,9 @@ contract OrderBook {
     /// @notice Shortest time a batch may stay open, in seconds.
     uint64 public minBatchDuration;
 
+    /// @notice How long after a batch opens before anyone may abandon it.
+    uint64 public voidDelay = 1 hours;
+
     event OrderSubmitted(
         address indexed trader, uint256 indexed batchId, address indexed tee, bytes32 instructionId
     );
@@ -67,6 +70,8 @@ contract OrderBook {
         uint256 indexed batchId, address indexed tee, uint32 orderCount, bytes32 instructionId
     );
     event BatchAdvanced(uint256 indexed settledBatchId, uint256 indexed newBatchId);
+    event BatchVoided(uint256 indexed voidedBatchId, uint256 indexed newBatchId);
+    event VoidDelaySet(uint64 seconds_);
     event MinBatchDurationSet(uint64 seconds_);
     event SettlementSet(address indexed settlement);
     event OwnerSet(address indexed owner);
@@ -84,6 +89,7 @@ contract OrderBook {
     error BatchNotClosed();
     error BatchEmpty();
     error BatchTooYoung(uint64 openedAt, uint64 minDuration);
+    error BatchNotVoidable(uint64 openedAt, uint64 voidDelay);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -204,6 +210,41 @@ contract OrderBook {
         emit BatchAdvanced(settled, currentBatchId);
     }
 
+    /// @notice Abandon the current batch without asking the enclave to clear it.
+    ///
+    /// @dev THE RECOVERY PATH FOR A VANISHED ENCLAVE. `batchTee` is pinned for
+    /// the batch's lifetime, and TEE machines are ephemeral: a rebuild registers
+    /// a new machine and the old one is eventually paused or simply stops
+    /// answering. Once that happens `closeBatch` reverts inside the registry,
+    /// which refuses to route to a paused machine, and `advanceBatch` cannot run
+    /// because the batch never closed. Without this function the batch is stuck
+    /// permanently, and so are the balances frozen behind it.
+    ///
+    /// Deliberately permissionless with no owner shortcut. Letting the owner
+    /// void immediately would let them cancel any batch whose outcome they
+    /// disliked, which is precisely the discretion this venue exists to remove.
+    /// Everyone waits out `voidDelay`, including the operator.
+    ///
+    /// Orders in a voided batch are never revealed and never settle. Traders
+    /// keep their balances and may resubmit into the next batch.
+    function voidBatch() external {
+        if (orderCount == 0 && !batchClosed) revert BatchEmpty();
+        if (block.timestamp < batchOpenedAt + voidDelay) {
+            revert BatchNotVoidable(batchOpenedAt, voidDelay);
+        }
+
+        uint256 voided = currentBatchId;
+        unchecked {
+            currentBatchId = voided + 1;
+        }
+        batchTee = address(0);
+        batchOpenedAt = 0;
+        orderCount = 0;
+        batchClosed = false;
+
+        emit BatchVoided(voided, currentBatchId);
+    }
+
     // --- internals -----------------------------------------------------------
 
     /// @dev Draws a machine on the batch's first order and reuses it thereafter.
@@ -252,6 +293,14 @@ contract OrderBook {
     function setMinBatchDuration(uint64 seconds_) external onlyOwner {
         minBatchDuration = seconds_;
         emit MinBatchDurationSet(seconds_);
+    }
+
+    /// @dev Lowering this shortens how long a stuck batch holds funds hostage;
+    /// raising it gives a healthy enclave more room before anyone can abandon a
+    /// batch it is still working on.
+    function setVoidDelay(uint64 seconds_) external onlyOwner {
+        voidDelay = seconds_;
+        emit VoidDelaySet(seconds_);
     }
 
     function setOwner(address owner_) external onlyOwner {

@@ -346,6 +346,79 @@ contract OrderBookTest is Test {
         book.advanceBatch();
     }
 
+    // --- voidBatch: recovery from a vanished enclave --------------------------
+
+    /**
+     * The scenario this exists for, reproduced: a batch is pinned to an enclave
+     * that later disappears. `closeBatch` would revert inside the registry and
+     * `advanceBatch` needs a closed batch, so without `voidBatch` the batch and
+     * every balance frozen behind it are stuck permanently.
+     */
+    function test_voidBatch_recoversAStuckBatch() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+        assertEq(book.orderCount(), 1);
+
+        vm.warp(block.timestamp + book.voidDelay());
+        vm.prank(address(0xDEAD)); // a stranger, not the operator
+        book.voidBatch();
+
+        assertEq(book.currentBatchId(), 2);
+        assertEq(book.orderCount(), 0);
+        assertEq(book.batchTee(), address(0));
+        assertFalse(book.batchClosed());
+    }
+
+    function test_voidBatch_beforeDelay_reverts() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OrderBook.BatchNotVoidable.selector, uint64(block.timestamp), book.voidDelay()
+            )
+        );
+        book.voidBatch();
+    }
+
+    /**
+     * No owner shortcut, on purpose. If the operator could void immediately they
+     * could cancel any batch whose outcome they disliked, which is exactly the
+     * discretion this venue exists to remove.
+     */
+    function test_voidBatch_ownerHasNoShortcut() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+
+        vm.prank(owner);
+        vm.expectRevert();
+        book.voidBatch();
+    }
+
+    function test_voidBatch_worksAfterCloseFails() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+        vm.warp(block.timestamp + MIN_BATCH);
+        book.closeBatch();
+
+        // Closed but never settled: the enclave went away mid-batch.
+        vm.warp(block.timestamp + book.voidDelay());
+        book.voidBatch();
+        assertEq(book.currentBatchId(), 2);
+    }
+
+    function test_voidBatch_emptyBatch_reverts() public {
+        vm.warp(block.timestamp + book.voidDelay());
+        vm.expectRevert(OrderBook.BatchEmpty.selector);
+        book.voidBatch();
+    }
+
+    function test_setVoidDelay_byNonOwner_reverts() public {
+        vm.prank(alice);
+        vm.expectRevert(OrderBook.NotOwner.selector);
+        book.setVoidDelay(1);
+    }
+
     // --- admin ---------------------------------------------------------------
 
     function test_setMinBatchDuration_byNonOwner_reverts() public {
