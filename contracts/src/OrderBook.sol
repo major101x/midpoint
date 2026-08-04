@@ -160,7 +160,19 @@ contract OrderBook {
 
         // Bind sender and batch to the payload so the enclave can reject a
         // replayed ciphertext rather than trusting the encrypted trader field.
-        bytes memory message = abi.encode(msg.sender, currentBatchId, ciphertext);
+        //
+        // The balances travel with it because the enclave otherwise clears blind:
+        // it can produce a perfectly valid, signed settlement that the vault
+        // cannot execute, which reverts the whole batch and strands everyone in
+        // it. Sending them leaks nothing, since vault balances are already public
+        // on chain and anyone can read them directly.
+        bytes memory message = abi.encode(
+            msg.sender,
+            currentBatchId,
+            VAULT.baseBalanceOf(msg.sender),
+            VAULT.quoteBalanceOf(msg.sender),
+            ciphertext
+        );
 
         instructionId = _send(tee, OP_COMMAND_SUBMIT_ORDER, message);
 

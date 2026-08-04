@@ -23,6 +23,12 @@ import {
   OP_COMMAND_SUBMIT_ORDER,
   OP_TYPE_SEALED,
 } from "./config.js";
+import {
+  InsufficientCollateralError,
+  commit,
+  releaseBatch,
+  resetCollateral,
+} from "./collateral.js";
 import { OrderValidationError, parseOrder, type RestingOrder } from "./order.js";
 import { teeSigner, type Signer } from "./sign.js";
 
@@ -62,6 +68,7 @@ export function setSigner(fn: Signer): void {
 
 export function resetState(): void {
   books.clear();
+  resetCollateral();
   lastClearedBatch = 0n;
   lastClearingPrice = 0n;
 }
@@ -127,6 +134,16 @@ export async function handleSubmitOrder(msg: string): Promise<HandlerResult> {
     return [null, 0, "invalid order"];
   }
 
+  // Reject anything the trader's vault balance cannot cover. Without this the
+  // enclave signs a settlement the vault refuses, reverting the batch and
+  // stranding every other trader in it.
+  try {
+    commit(envelope.batchId, order, envelope.baseBalance, envelope.quoteBalance);
+  } catch (e) {
+    if (e instanceof InsufficientCollateralError) return [null, 0, e.message];
+    throw e;
+  }
+
   const key = envelope.batchId.toString();
   const book = books.get(key) ?? [];
   book.push(order);
@@ -184,6 +201,7 @@ export async function handleRunMatch(msg: string): Promise<HandlerResult> {
   // signing failure destroyed the batch with no way to retry it. A batch that
   // does not cross still clears, as an empty settlement, so funds unfreeze.
   books.delete(key);
+  releaseBatch(batchId);
   lastClearedBatch = batchId;
   lastClearingPrice = clearingPrice;
 

@@ -14,6 +14,8 @@ import {decodeAbiParameters, encodeAbiParameters, type Hex} from "viem";
 const SUBMIT_ORDER_PARAMS = [
   {name: "trader", type: "address"},
   {name: "batchId", type: "uint256"},
+  {name: "baseBalance", type: "uint256"},
+  {name: "quoteBalance", type: "uint256"},
   {name: "ciphertext", type: "bytes"},
 ] as const;
 
@@ -23,14 +25,27 @@ export interface SubmitOrderEnvelope {
   /** Authoritative submitter, taken from msg.sender on chain. */
   trader: `0x${string}`;
   batchId: bigint;
+  /**
+   * The trader's vault balances, read on chain at submission.
+   *
+   * The enclave cannot see the vault, so without these it clears blind and can
+   * sign a settlement the vault cannot execute, which reverts the batch and
+   * strands everyone in it. Passing them leaks nothing: vault balances are
+   * already public.
+   */
+  baseBalance: bigint;
+  quoteBalance: bigint;
   /** Encrypted to the enclave's public key. Opaque until decrypted. */
   ciphertext: Hex;
 }
 
 export function decodeSubmitOrder(data: Hex): SubmitOrderEnvelope {
   try {
-    const [trader, batchId, ciphertext] = decodeAbiParameters(SUBMIT_ORDER_PARAMS, data);
-    return {trader, batchId, ciphertext};
+    const [trader, batchId, baseBalance, quoteBalance, ciphertext] = decodeAbiParameters(
+      SUBMIT_ORDER_PARAMS,
+      data,
+    );
+    return {trader, batchId, baseBalance, quoteBalance, ciphertext};
   } catch (e) {
     throw new Error(`ABI decode failed: ${e instanceof Error ? e.message : String(e)}`);
   }

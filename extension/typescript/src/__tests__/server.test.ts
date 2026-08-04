@@ -11,10 +11,15 @@ import { Server } from "../base/server.js";
 const SUBMIT_PARAMS = [
   { name: "trader", type: "address" },
   { name: "batchId", type: "uint256" },
+  { name: "baseBalance", type: "uint256" },
+  { name: "quoteBalance", type: "uint256" },
   { name: "ciphertext", type: "bytes" },
 ] as const;
 
 const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
+
+/** Balances large enough that collateral is never the thing under test here. */
+const PLENTY = 10n ** 24n;
 
 const TRADER = "0x00000000000000000000000000000000000000A1" as const;
 
@@ -33,7 +38,7 @@ function submitPayload(batchId = 1n, ciphertext?: `0x${string}`): Buffer {
       }),
       "utf-8",
     ).toString("hex")}` as `0x${string}`);
-  return Buffer.from(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [TRADER, batchId, ct])));
+  return Buffer.from(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [TRADER, batchId, PLENTY, PLENTY, ct])));
 }
 
 let srv: Server;

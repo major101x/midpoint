@@ -116,12 +116,44 @@ contract OrderBookTest is Test {
         book.submitOrder(CIPHERTEXT);
 
         MockExtensionRegistry.Sent memory s = extReg.sentAt(0);
-        (address trader, uint256 batchId, bytes memory ct) =
-            abi.decode(s.message, (address, uint256, bytes));
+        (address trader, uint256 batchId,,, bytes memory ct) =
+            abi.decode(s.message, (address, uint256, uint256, uint256, bytes));
 
         assertEq(trader, alice);
         assertEq(batchId, 1);
         assertEq(ct, CIPHERTEXT);
+    }
+
+    /**
+     * The enclave cannot see the vault, so without this it clears blind and can
+     * sign a settlement the vault cannot execute, reverting the batch and
+     * stranding everyone in it. Sending balances leaks nothing: they are already
+     * public on chain.
+     */
+    function test_submitOrder_carriesVaultBalances() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+
+        MockExtensionRegistry.Sent memory s = extReg.sentAt(0);
+        (,, uint256 base, uint256 quote,) =
+            abi.decode(s.message, (address, uint256, uint256, uint256, bytes));
+
+        assertEq(base, vault.baseBalanceOf(alice));
+        assertEq(quote, vault.quoteBalanceOf(alice));
+    }
+
+    function test_submitOrder_balancesTrackDeposits() public {
+        vm.prank(alice);
+        book.submitOrder(CIPHERTEXT);
+
+        vm.startPrank(alice);
+        vault.deposit(true, 5 * ONE);
+        book.submitOrder(CIPHERTEXT);
+        vm.stopPrank();
+
+        (,, uint256 base,,) =
+            abi.decode(extReg.sentAt(1).message, (address, uint256, uint256, uint256, bytes));
+        assertEq(base, 15 * ONE, "second order should see the larger balance");
     }
 
     /// @dev The whole point of the venue: nothing about the order is legible here.
@@ -130,7 +162,7 @@ contract OrderBookTest is Test {
         book.submitOrder(CIPHERTEXT);
 
         MockExtensionRegistry.Sent memory s = extReg.sentAt(0);
-        (,, bytes memory ct) = abi.decode(s.message, (address, uint256, bytes));
+        (,,,, bytes memory ct) = abi.decode(s.message, (address, uint256, uint256, uint256, bytes));
         // The contract stores a count, never a size, price or side.
         assertEq(book.orderCount(), 1);
         assertEq(ct, CIPHERTEXT);

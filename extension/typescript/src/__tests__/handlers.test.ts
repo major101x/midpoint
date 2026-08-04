@@ -22,10 +22,15 @@ import { bytesToHex, hexToBytes } from "../base/encoding.js";
 const SUBMIT_PARAMS = [
   { name: "trader", type: "address" },
   { name: "batchId", type: "uint256" },
+  { name: "baseBalance", type: "uint256" },
+  { name: "quoteBalance", type: "uint256" },
   { name: "ciphertext", type: "bytes" },
 ] as const;
 
 const MATCH_PARAMS = [{ name: "batchId", type: "uint256" }] as const;
+
+/** Balances large enough that collateral is never the thing under test here. */
+const PLENTY = 10n ** 24n;
 
 const ALICE = "0x00000000000000000000000000000000000000A1" as const;
 
@@ -55,8 +60,21 @@ beforeEach(() => {
 });
 const BOB = "0x00000000000000000000000000000000000000b0" as const;
 
+/** Same envelope, but with balances the caller controls. */
+function submitMsgWithBalances(
+  trader: `0x${string}`,
+  batchId: bigint,
+  ciphertext: `0x${string}`,
+  base: bigint,
+  quote: bigint,
+): string {
+  return bytesToHex(
+    hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [trader, batchId, base, quote, ciphertext])),
+  );
+}
+
 function submitMsg(trader: `0x${string}`, batchId: bigint, ciphertext: `0x${string}`): string {
-  return bytesToHex(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [trader, batchId, ciphertext])));
+  return bytesToHex(hexToBytes(encodeAbiParameters(SUBMIT_PARAMS, [trader, batchId, PLENTY, PLENTY, ciphertext])));
 }
 
 function matchMsg(batchId: bigint): string {
@@ -84,6 +102,31 @@ describe("SUBMIT_ORDER", () => {
     const [data] = await handleSubmitOrder(submitMsg(ALICE, 2n, order(ALICE, 2n)));
     expect(decodeData(data).ordersInBatch).toBe(1);
     expect((reportState() as { openBatches: number }).openBatches).toBe(2);
+  });
+
+  /**
+   * The live failure of 2026-08-04, at the handler level. Two sells that each
+   * fit the balance but together do not. Letting the second through would have
+   * the enclave sign a settlement the vault refuses, reverting the batch for
+   * everyone in it.
+   */
+  it("rejects an order the trader's vault balance cannot cover", async () => {
+    const threeFxrp = 3_000_000n;
+    const twoFxrp = { size: "2000000", side: "SELL" };
+
+    const first = await handleSubmitOrder(
+      submitMsgWithBalances(ALICE, 1n, order(ALICE, 1n, twoFxrp), threeFxrp, 0n),
+    );
+    expect(first[1]).toBe(1);
+
+    const second = await handleSubmitOrder(
+      submitMsgWithBalances(ALICE, 1n, order(ALICE, 1n, twoFxrp), threeFxrp, 0n),
+    );
+    expect(second[1]).toBe(0);
+    expect(second[2]).toContain("exceeds available base");
+
+    // The rejected order is not in the book.
+    expect((reportState() as { openOrders: number }).openOrders).toBe(1);
   });
 
   it("rejects an empty ciphertext", async () => {
