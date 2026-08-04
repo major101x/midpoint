@@ -41,6 +41,7 @@ let srv: Server;
 beforeEach(() => {
   handlers.resetState();
   handlers.setDecryptor(async (ct) => ct);
+  handlers.setSigner(async () => new Uint8Array(65).fill(7));
   srv = new Server(0, 0, VERSION, handlers.register, handlers.reportState);
 });
 afterEach(() => handlers.resetState());
@@ -227,7 +228,9 @@ describe("ActionResult wire format", () => {
     expect(r.status).toBe(1);
     expect(JSON.parse(Buffer.from(hexToBytes(r.data as string)).toString("utf-8"))).toMatchObject({
       batchId: "1",
-      orders: 1,
+      // One buy alone cannot cross, so the batch clears empty but still settles.
+      clearingPrice: "0",
+      volume: "0",
     });
   });
 });

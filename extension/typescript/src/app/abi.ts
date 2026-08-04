@@ -9,7 +9,7 @@
  * OrderBook.closeBatch sends abi.encode(uint256 batchId).
  */
 
-import {decodeAbiParameters, type Hex} from "viem";
+import {decodeAbiParameters, encodeAbiParameters, type Hex} from "viem";
 
 const SUBMIT_ORDER_PARAMS = [
   {name: "trader", type: "address"},
@@ -43,4 +43,42 @@ export function decodeRunMatch(data: Hex): {batchId: bigint} {
   } catch (e) {
     throw new Error(`ABI decode failed: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/**
+ * The settlement payload the enclave signs and Settlement.sol verifies.
+ *
+ * Encoded exactly as Solidity would encode
+ *   (uint256 batchId, uint256 clearingPrice, Fill[] fills)
+ * with Fill = (address trader, uint8 side, uint256 size), side 0 = BUY, 1 = SELL.
+ *
+ * Both sides must agree byte for byte: the signature is over keccak256 of these
+ * bytes, so any encoding difference makes every settlement fail verification.
+ */
+const SETTLEMENT_PARAMS = [
+  {name: "batchId", type: "uint256"},
+  {name: "clearingPrice", type: "uint256"},
+  {
+    name: "fills",
+    type: "tuple[]",
+    components: [
+      {name: "trader", type: "address"},
+      {name: "side", type: "uint8"},
+      {name: "size", type: "uint256"},
+    ],
+  },
+] as const;
+
+export interface EncodableFill {
+  trader: `0x${string}`;
+  side: 0 | 1;
+  size: bigint;
+}
+
+export function encodeSettlement(
+  batchId: bigint,
+  clearingPrice: bigint,
+  fills: readonly EncodableFill[],
+): Hex {
+  return encodeAbiParameters(SETTLEMENT_PARAMS, [batchId, clearingPrice, fills]);
 }

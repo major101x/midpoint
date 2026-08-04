@@ -15,6 +15,7 @@ import {
   reportState,
   resetState,
   setDecryptor,
+  setSigner,
 } from "../app/handlers.js";
 import { bytesToHex, hexToBytes } from "../base/encoding.js";
 
@@ -47,7 +48,11 @@ function order(
 }
 
 /** Identity decryptor: tests supply plaintext directly as the ciphertext. */
-beforeEach(() => setDecryptor(async (ct) => ct));
+beforeEach(() => {
+  setDecryptor(async (ct) => ct);
+  // Deterministic stub signature; the real one is exercised on chain.
+  setSigner(async () => new Uint8Array(65).fill(7));
+});
 const BOB = "0x00000000000000000000000000000000000000b0" as const;
 
 function submitMsg(trader: `0x${string}`, batchId: bigint, ciphertext: `0x${string}`): string {
@@ -107,29 +112,52 @@ describe("RUN_MATCH", () => {
     await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
     await handleSubmitOrder(submitMsg(BOB, 1n, order(BOB, 1n)));
 
-    const [data, status, err] = handleRunMatch(matchMsg(1n));
+    const [data, status, err] = await handleRunMatch(matchMsg(1n));
     expect(err).toBeNull();
     expect(status).toBe(1);
-    expect(decodeData(data).orders).toBe(2);
+    expect(decodeData(data).batchId).toBe('1');
     expect((reportState() as { openBatches: number }).openBatches).toBe(0);
   });
 
-  it("refuses to clear a batch with no orders", () => {
-    const [, status, err] = handleRunMatch(matchMsg(99n));
+  it("refuses to clear a batch with no orders", async () => {
+    const [, status, err] = await handleRunMatch(matchMsg(99n));
     expect(status).toBe(0);
     expect(err).toContain("no orders");
   });
 
   it("refuses to clear the same batch twice", async () => {
     await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
-    expect(handleRunMatch(matchMsg(1n))[1]).toBe(1);
-    expect(handleRunMatch(matchMsg(1n))[1]).toBe(0);
+    expect((await handleRunMatch(matchMsg(1n)))[1]).toBe(1);
+    expect((await handleRunMatch(matchMsg(1n)))[1]).toBe(0);
+  });
+
+  /**
+   * A signing failure must not destroy the book. If RUN_MATCH consumed the
+   * batch before obtaining a signature, an unreachable sign port would lose
+   * every order in it with no way to retry or void the batch on chain.
+   */
+  it("keeps the book when signing fails, so the batch can be retried", async () => {
+    await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
+    setSigner(async () => {
+      throw new Error("sign port unreachable");
+    });
+
+    const [, status, err] = await handleRunMatch(matchMsg(1n));
+    expect(status).toBe(0);
+    expect(err).toContain("signing failed");
+    // Still there.
+    expect((reportState() as { openOrders: number }).openOrders).toBe(1);
+
+    // And a retry once signing recovers succeeds.
+    setSigner(async () => new Uint8Array(65).fill(7));
+    expect((await handleRunMatch(matchMsg(1n)))[1]).toBe(1);
+    expect((reportState() as { openOrders: number }).openOrders).toBe(0);
   });
 
   it("leaves other batches untouched", async () => {
     await handleSubmitOrder(submitMsg(ALICE, 1n, order(ALICE, 1n)));
     await handleSubmitOrder(submitMsg(BOB, 2n, order(BOB, 2n)));
-    handleRunMatch(matchMsg(1n));
+    await handleRunMatch(matchMsg(1n));
     expect((reportState() as { openOrders: number }).openOrders).toBe(1);
   });
 });
