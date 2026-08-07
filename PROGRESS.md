@@ -508,3 +508,113 @@ which orders were valid.
 ### Next
 
 Frontend, then the naive-AMM comparison demo, then the video and submission.
+
+---
+
+## Day 11, 2026-08-07: web interface
+
+Vite + React + viem, in `web/`. The page is arranged around one contrast,
+because that contrast is the product: a "what the chain sees" panel beside a
+"what only the enclave sees" panel. Orders are sealed in the browser, so
+plaintext never leaves the page, reusing the ECIES the `client` package tests
+with `Buffer` removed.
+
+Verified against the live deployment: batch 2, enclave pinned
+`0x02a2Dd00...`, last settled batch 1, all read from Coston2. Screenshot in
+`docs/screenshot.png`.
+
+The order form mirrors the enclave's collateral rule so an order the TEE would
+reject is caught before it costs an instruction fee. The footer states the
+attestation posture without being asked.
+
+Vite proxies `/tee` to `localhost:6674`, because the FCC proxy sends no CORS
+headers.
+
+---
+
+## Day 12, 2026-08-07: the comparison, and a third settled batch
+
+**88 Solidity tests (9 new), 93 extension, 13 client.**
+
+The MEV claim is now measured rather than asserted. `NaiveAmm` is a correct
+constant-product pool for the same FXRP/USDT0 pair, deployed separately at
+`0xe93ded1d2a9501ad47f493a17a2bb1411148d408`, and `client/scripts/sandwich.mjs`
+runs the same trade down both paths on Coston2.
+
+```
+                                public pool         sealed venue
+visible before it fills         yes                 no
+price depends on order size     yes                 no, one clearing price
+checked against an oracle       no                  yes, FTSO band
+execution price                 1.133141            1.026613
+price if unobserved             1.048538            1.026613
+cost of being observed          747 bps             0 bps
+```
+
+Stable at 746-747 bps across five consecutive runs. The searcher ends flat in
+FXRP and up roughly 0.0014 USDT0, funded entirely by the front-run's proceeds.
+
+### The point the pool makes better than any argument
+
+Nothing in `NaiveAmm` is deliberately broken. It has tracked reserves, a 30 bps
+fee, a slippage bound, and it re-prices against what actually arrived rather
+than what was asked for. It is sandwichable anyway. The vulnerability is in the
+shape of the venue, not in a bug a careful developer would have caught, which is
+why a better AMM implementation is not the answer.
+
+The slippage bound is worth singling out. `test_sandwich_slippageBoundConvertsA-`
+`LossIntoAFailedTrade` shows it converts a bad fill into a failed trade rather
+than preventing the extraction. It caps the loss at whatever the trader was
+willing to tolerate, and an attacker sizes the front-run to take exactly that.
+
+### Honest limits, stated in the script header rather than left to be found
+
+1. **Coston2 exposes no public mempool.** `txpool_status` is not served and
+   there is no pending-transaction subscription. The script cannot race for the
+   ordering a real searcher races for, so it executes the three transactions in
+   the order a successful searcher achieves. The claim under test is "an
+   attacker who front-runs profits", not "an attacker always wins the race".
+2. **The pool is shallow**, because faucet FXRP is capped at 10 per address per
+   day and only about 5 exists across all three wallets. Constant-product
+   pricing is scale invariant, so sizes are set as fractions of the reserves and
+   the depth is printed with every result. The same figures hold on a pool a
+   million times deeper.
+
+### Problems hit and fixed
+
+1. **`PriceOutsideBand` on the first full run.** Hardcoded limits cleared at
+   1.074488 against a feed reading 1.029415, outside the 2% band. This is the
+   guard working. Limits are now derived from the live FTSO reading, straddling
+   it by 1%.
+2. **`OutOfGas` inside FXRP.** FXRP is a FAssets proxy whose `transfer`
+   delegates twice and reads an emergency-pause flag from a third contract. A
+   swap paying out FXRP costs far more than the estimator predicts against
+   pre-swap state. Gas is now padded 50%.
+3. **Instructions silently not picked up again**, the day 7 failure recurring
+   after a reward epoch advance. `post-build.sh` fixes it, but it needs the
+   ngrok tunnel running first and `go` on `PATH` (`~/.local/go/bin`).
+4. **A second zombie TEE machine.** Restarting the container regenerated the
+   identity key, so `getActiveTeeMachines` now lists both `0x02a2Dd00...` (dead)
+   and `0xeDA60B45...` (live). Batch 2 was pinned to the dead one and had to be
+   voided. `getRandomTeeIds` returned the live machine on six consecutive
+   samples, so the registry appears to filter on recent availability even though
+   both stay listed as active. Relying on that is luck, not design; the standing
+   answer is still a fresh extension id.
+5. **Runs inherited the previous run's skew.** Each sandwich left the pool
+   further from the oracle, so absolute prices drifted out of comparability. An
+   arbitrage step now returns the pool to the FTSO price first, which is what a
+   real pool experiences between trades.
+
+### Live deployment (unchanged, plus the pool)
+
+| Thing | Address |
+|---|---|
+| NaiveAmm (comparison baseline, not part of the venue) | `0xe93ded1d2a9501ad47f493a17a2bb1411148d408` |
+| TEE machine (current) | `0xeDA60B450bcdef15cFD8F6e594545e91F4B5E3A8` |
+
+Batch 4 settled at 1.026613. Batches 2 and 3 were voided, 2 for the dead
+enclave pin and 3 for the out-of-band clearing price.
+
+### Next
+
+Buffer and polish, then the video and the submission writeup.
