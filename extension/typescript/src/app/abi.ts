@@ -1,5 +1,5 @@
 /**
- * ★ ABI decoding for the Sealed operations.
+ * ★ ABI decoding for the Midpoint operations.
  *
  * OrderBook.submitOrder sends abi.encode(address trader, uint256 batchId,
  * bytes ciphertext). The trader and batch id are supplied by the contract, NOT

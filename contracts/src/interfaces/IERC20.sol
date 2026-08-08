@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-/// @notice Minimal ERC20 surface used by Sealed.
+/// @notice Minimal ERC20 surface used by Midpoint.
 /// @dev Transfers are performed through low-level calls in SafeTransfer rather
 /// than through this interface, because tokens in the USDT lineage do not
 /// return a bool and would revert a strictly typed call. This interface is kept

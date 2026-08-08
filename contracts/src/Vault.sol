@@ -5,19 +5,19 @@ import {IERC20} from "./interfaces/IERC20.sol";
 import {SafeTransfer} from "./SafeTransfer.sol";
 
 /// @title Vault
-/// @notice Holds trader balances for the Sealed venue.
+/// @notice Holds trader balances for the Midpoint venue.
 ///
 /// @dev WHY THIS CONTRACT EXISTS.
 ///
 /// The obvious venue design escrows funds per order. That is fatal here: the
 /// escrowed amount *is* the order size, published on chain, which makes the
-/// order encryption decorative. Sealed instead has traders pre-fund an internal
+/// order encryption decorative. Midpoint instead has traders pre-fund an internal
 /// balance and draw orders against it, so the public act of depositing is
 /// decoupled from the private act of ordering, in both time and amount.
 ///
 /// A consequence is that the chain cannot know whether a trader's balance
 /// covers their (encrypted) order. Locking the exact amount at submission time
-/// is impossible without revealing it. Sealed therefore freezes withdrawals for
+/// is impossible without revealing it. Midpoint therefore freezes withdrawals for
 /// the duration of a settling batch rather than locking per-order amounts. See
 /// `setFrozen`.
 ///

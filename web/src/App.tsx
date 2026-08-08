@@ -1,5 +1,5 @@
 /**
- * Sealed: a sealed-bid batch auction venue for FXRP.
+ * Midpoint: a sealed-bid batch auction venue for FXRP.
  *
  * The interface is organised around the one thing worth showing: what the chain
  * can see next to what only the enclave can see. Everything else is plumbing.
@@ -345,7 +345,7 @@ function Header({ teeExtension, account, onConnect }: {
   return (
     <header>
       <div>
-        <h1>Sealed</h1>
+        <h1>Midpoint</h1>
         <p className="tagline">
           A sealed-bid batch auction for FXRP. Orders are encrypted to a Flare
           TEE, cleared at one uniform price, and settled on Coston2.

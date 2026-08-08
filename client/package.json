@@ -1,9 +1,9 @@
 {
-  "name": "@sealed/client",
+  "name": "@midpoint/client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Client-side order sealing for the Sealed venue. Encrypts orders to a Flare TEE's public key.",
+  "description": "Client-side order sealing for the Midpoint venue. Encrypts orders to a Flare TEE's public key.",
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

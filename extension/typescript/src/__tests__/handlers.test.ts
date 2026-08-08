@@ -1,5 +1,5 @@
 /**
- * Handler tests for the Sealed venue.
+ * Handler tests for the Midpoint venue.
  *
  * The confidentiality assertions are the important ones. A venue that clears
  * correctly but leaks its book is worthless, so "state never exposes an order"

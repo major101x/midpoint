@@ -6,7 +6,7 @@ import {ITeeMachineRegistry} from "./interfaces/ITeeMachineRegistry.sol";
 import {Vault} from "./Vault.sol";
 
 /// @title OrderBook
-/// @notice On-chain entry point for the Sealed venue. Relays encrypted orders
+/// @notice On-chain entry point for the Midpoint venue. Relays encrypted orders
 /// into the TEE and asks it to clear the batch.
 ///
 /// @dev This contract deliberately learns nothing about orders. It sees a blob

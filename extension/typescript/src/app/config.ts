@@ -1,7 +1,7 @@
 /**
  * ★ Configuration: version and operation identifiers.
  *
- * These strings MUST match the bytes32 constants in the Sealed OrderBook
+ * These strings MUST match the bytes32 constants in the Midpoint OrderBook
  * contract exactly, or actions fall through to "unsupported op type" (501).
  *
  *   OrderBook.OP_TYPE_SEALED          = bytes32("SEALED")

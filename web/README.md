@@ -1,4 +1,4 @@
-# Sealed, web interface
+# Midpoint, web interface
 
 The trading interface. Orders are sealed in the browser, so plaintext never
 leaves this page.

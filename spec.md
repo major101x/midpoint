@@ -1,11 +1,18 @@
-# Sealed: Technical Specification
+# Midpoint: Technical Specification
 
 **A sealed-bid batch auction venue for FXRP, with the matching engine inside a TEE.**
 
 Flare Summer Signal · Bounty 1 (Interoperable Asset Products) + Bounty 2 (Confidential Compute Apps)
 Target network: Coston2 (chain ID 114) · Solo build · 15 days (2026-07-30 to 2026-08-14)
 
-> The name is a placeholder and cheap to change. Everything else here is a decision.
+> **On the name.** A dark pool crosses at the midpoint of the spread, and this
+> venue's auction clears at the midpoint of the tied price range. The word means
+> the same thing in both halves of what this is.
+>
+> The wire protocol still calls the operation type `SEALED`, and deliberately so:
+> that constant is deployed on-chain and matched by the extension's handler
+> registration, and "sealed-bid" remains the correct term for the mechanism
+> regardless of what the venue is called.
 
 ---
 
@@ -71,10 +78,10 @@ Being first in the batch is worth exactly nothing. That is the point.
       │ 3. POST /action
       ▼
  ┌─────────────────────────────────────────────────────────────┐
- │ Sealed FCE  (TypeScript, Docker, inside TEE)                 │
- │   /decrypt via tee-node sign port                            │
- │   private in-memory order book                               │  CONFIDENTIAL
- │   4. uniform-price clearing -> signed settlement payload      │
+ │ Midpoint FCE  (TypeScript, Docker, inside TEE)              │
+ │   /decrypt via tee-node sign port                           │
+ │   private in-memory order book                              │  CONFIDENTIAL
+ │   4. uniform-price clearing -> signed settlement payload    │
  └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -102,7 +109,7 @@ closeBatch() payable                       -> OP_TYPE=SEALED, OP_COMMAND=RUN_MAT
 
 Rejects orders from addresses with zero balance (cheap spam guard that leaks nothing about size). `closeBatch` is permissionless and rate-limited by a minimum batch duration.
 
-**Sealed FCE (TypeScript)**: An HTTP server satisfying `docs/extension-contract.md`. Handlers registered against `(SEALED, SUBMIT_ORDER)` and `(SEALED, RUN_MATCH)`. On submit: decrypt via `NodeClient`, validate, insert into the in-memory book for the current batch. On match: clear, produce the settlement payload, sign it, return it. `GET /state` exposes only non-sensitive aggregates, namely batch number, order count, and last clearing price. **Never the book.**
+**Midpoint FCE (TypeScript)**: An HTTP server satisfying `docs/extension-contract.md`. Handlers registered against `(SEALED, SUBMIT_ORDER)` and `(SEALED, RUN_MATCH)`. On submit: decrypt via `NodeClient`, validate, insert into the in-memory book for the current batch. On match: clear, produce the settlement payload, sign it, return it. `GET /state` exposes only non-sensitive aggregates, namely batch number, order count, and last clearing price. **Never the book.**
 
 **`Settlement.sol`**: Accepts `(batchId, fills[], clearingPrice, signature)`. Rejects unless:
 1. `ecrecover` of the EIP-191 digest equals the `batchTee` recorded for that batch, so only the enclave that held the book can settle it (see §7 Q1);

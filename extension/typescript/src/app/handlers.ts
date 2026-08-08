@@ -1,5 +1,5 @@
 /**
- * ★ MAIN CUSTOMIZATION POINT: the Sealed venue's handlers.
+ * ★ MAIN CUSTOMIZATION POINT: the Midpoint venue's handlers.
  *
  * This module holds the order book. It is the only place in the system where
  * order contents are legible, and it lives inside the enclave, so nothing here

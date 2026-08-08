@@ -114,7 +114,7 @@ privacy claim rests on.
 
 The consequence is that the chain cannot know whether a trader's balance covers
 their encrypted order, so it cannot lock the right amount at submission time
-without revealing it. Sealed freezes withdrawals for the duration of a settling
+without revealing it. Midpoint freezes withdrawals for the duration of a settling
 batch instead. Deposits stay open while frozen, since blocking inflows would be
 gratuitous.
 
