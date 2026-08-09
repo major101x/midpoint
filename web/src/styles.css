@@ -31,6 +31,48 @@ body {
    matters on every price, balance and basis-point number on this page. */
 .cipher, dd, input, .mev-row strong, .stat-value { font-variant-numeric: tabular-nums; }
 
+/* --- border sheen ----------------------------------------------------------
+   A 1px ring drawn over the element's own border, bright at the bottom-left
+   and top-right corners and transparent between them.
+
+   Built as a masked pseudo-element rather than with the usual two-background
+   `background-clip` trick, because that trick has to paint a background and
+   would destroy the `backdrop-filter` on the glass card. This paints only the
+   ring, so one rule serves both solid panels and glass.
+
+   The element keeps its ordinary border. That border supplies the dim baseline
+   and the gradient only adds the highlights, so the edge never disappears
+   where the gradient is transparent. */
+.sheen, .card, .mev { position: relative; }
+.sheen::after, .card::after, .mev::after {
+  content: "";
+  position: absolute;
+  /* The containing block is the parent's padding box, so -1px reaches exactly
+     across the 1px border to the border box, which is where the radius is
+     resolved and therefore where the ring belongs. */
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    var(--sheen-angle),
+    var(--sheen-lo) 0%,
+    transparent 38%,
+    transparent 62%,
+    var(--sheen-hi) 100%
+  );
+  /* Punches out the middle so only the 1px ring survives. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The public and private panels carry their meaning on the left edge, and that
+   colour is the product's whole argument. The ring is clipped clear of it so a
+   neutral highlight never competes with a semantic one. */
+.card.public::after, .card.private::after { clip-path: inset(0 0 0 5px); }
+
 /* Keyboard focus must stay visible everywhere. */
 :where(a, button, input, [tabindex]):focus-visible {
   outline: none;
@@ -56,11 +98,25 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 .tagline { margin: 6px 0 0; color: var(--muted); max-width: 52ch; }
 .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.chip {
-  padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px;
-  font-size: 12px; color: var(--muted); background: var(--panel);
+/* --- glass pills -----------------------------------------------------------
+   Chips and the hero badge sit on GlassSurface, so they pick up whatever is
+   behind them (the aurora, for the badge) instead of a flat fill. The
+   component supplies the surface; these rules supply the size and type. */
+.glass-pill {
+  display: inline-flex; width: auto !important; height: auto !important;
+  border-radius: var(--radius-pill);
 }
-.chip.account { color: var(--text); font-family: ui-monospace, monospace; }
+.glass-pill .glass-surface__content {
+  width: auto; height: auto;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.chip .glass-surface__content {
+  padding: 5px 10px;
+  font-size: var(--text-xs); color: var(--text-muted);
+}
+.chip.account .glass-surface__content { color: var(--text); font-family: var(--font-mono); }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
@@ -144,12 +200,10 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 
 /* The badge above the headline. States where this is running, which is a fact
    worth leading with when the whole claim rests on a real deployment. */
-.badge {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  margin-bottom: var(--space-5); padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--line-strong); border-radius: var(--radius-pill);
-  background: var(--surface); font-size: var(--text-xs);
-  color: var(--text-muted); letter-spacing: 0.01em;
+.badge { margin-bottom: var(--space-5); }
+.badge .glass-surface__content {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs); color: var(--text-muted); letter-spacing: 0.01em;
 }
 .badge-dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--private);

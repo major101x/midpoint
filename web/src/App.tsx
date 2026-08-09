@@ -38,6 +38,7 @@ import { sealOrder, type Side } from "./lib/order";
 import { awaitResult, decodeBatchResult } from "./lib/relayer";
 import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
 import AuroraBackdrop from "@/components/AuroraBackdrop";
+import GlassPill from "@/components/GlassPill";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 
@@ -386,10 +387,12 @@ function Header({ teeExtension, account, onConnect }: {
         </p>
       </div>
       <div className="header-right">
-        <div className="chip">Coston2</div>
-        {teeExtension && <div className="chip">enclave {short(teeExtension, 8, 6)}</div>}
+        <GlassPill className="chip">Coston2</GlassPill>
+        {teeExtension && (
+          <GlassPill className="chip">enclave {short(teeExtension, 8, 6)}</GlassPill>
+        )}
         {account ? (
-          <div className="chip account">{short(account, 6, 4)}</div>
+          <GlassPill className="chip account">{short(account, 6, 4)}</GlassPill>
         ) : (
           <button className="primary" onClick={onConnect}>Connect wallet</button>
         )}
@@ -413,10 +416,10 @@ function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) 
 
       <div className="container hero">
       <div className="hero-copy">
-        <span className="badge">
+        <GlassPill className="badge">
           <span className="badge-dot" />
           Live on Flare Coston2
-        </span>
+        </GlassPill>
         <p className="kicker">The problem</p>
         <p className="hero-title">
           Every on-chain trade announces itself before it executes.

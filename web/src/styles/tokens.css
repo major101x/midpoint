@@ -142,6 +142,24 @@
      shape rather than as a softened rectangle. */
   --radius-band: 40px;
 
+  /* ---------------------------------------------------------------------
+     Border sheen. A hairline lit at two opposite corners, as if one light
+     source were catching the edge of a raised surface.
+
+     The angle points at the top-right, so the gradient runs bottom-left to
+     top-right: `--sheen-lo` lands on the bottom-left corner and `--sheen-hi`
+     on the top-right. Both remaining corners sit at the midpoint of that axis
+     and stay dark, which is what makes the effect read as one light rather
+     than as a glowing outline.
+
+     Tinted cool rather than pure white, and kept to roughly 1.6x over the base
+     border. Past that it stops looking like a material and starts looking like
+     a highlight someone drew on.
+     --------------------------------------------------------------------- */
+  --sheen-angle: 45deg;
+  --sheen-lo: rgba(198, 214, 255, 0.10);
+  --sheen-hi: rgba(214, 226, 255, 0.26);
+
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.45);
   --shadow-glass: 0 24px 64px rgba(0, 0, 0, 0.5);

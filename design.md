@@ -159,6 +159,46 @@ Three shadows only: `--shadow-card` for resting panels, `--shadow-raised` for
 things that lift, `--shadow-glass` for the hero card, which needs a deeper
 shadow to separate from a moving background.
 
+### 4.1 Border sheen
+
+Panels carry a hairline lit at two opposite corners, as if a single light were
+catching the edge of a raised surface. `--sheen-angle` points at the top-right,
+so the gradient runs bottom-left to top-right with `--sheen-lo` on one end and
+`--sheen-hi` on the other. **Both remaining corners sit at the midpoint of that
+axis and stay dark**, which is what makes it read as one light source rather
+than as a glowing outline. Getting that wrong, by lighting all four corners, is
+the usual way this effect ends up looking cheap.
+
+Measured against the reference it was taken from:
+
+| | Reference | Ours |
+|---|---|---|
+| Brightest corner | top-right | top-right |
+| Order | TR > BR > BL > TL | TR > BR > BL > TL |
+| Bright:dim ratio | 1.66x | 1.60x |
+
+Kept deliberately near that ratio. Past roughly 2x it stops looking like a
+material property and starts looking like a highlight someone drew on.
+
+**Applied to panels only**: the six section cards and the glass MEV card.
+Inputs, buttons and the side toggles keep plain borders, because the effect
+means "raised surface" and a 28px input is not one.
+
+Two implementation notes, both load-bearing:
+
+- It is a **masked pseudo-element**, not the usual two-background
+  `background-clip` recipe. That recipe has to paint a background, which would
+  destroy the `backdrop-filter` on the glass card. Painting only the ring means
+  one rule serves both solid and glass surfaces.
+- The element **keeps its ordinary border**. That border is the dim baseline
+  and the gradient only adds highlights, so the edge never vanishes where the
+  gradient is transparent.
+
+**The public and private panels are excluded from the left edge** with
+`clip-path`. Their coloured left border is the semantic signal from section
+2.1, and a neutral highlight must never compete with it. The sheen runs along
+their other three sides.
+
 ---
 
 ## 5. The hero
@@ -275,6 +315,23 @@ npx shadcn@latest add @react-bits/Aurora-TS-CSS
 
 Two conventions come with that, and both are worth keeping:
 
+Two components come from that registry:
+
+| Component | Used for |
+|---|---|
+| `@react-bits/Aurora-TS-CSS` | the hero glow |
+| `@react-bits/GlassSurface-TS-CSS` | the header chips and the hero badge |
+
+`GlassSurface` needs three of its defaults overridden, and the first is not
+optional: `mixBlendMode` ships as `difference`, which inverts whatever sits
+behind it and turns a subtle pill into a bright inverted patch on a near-black
+page. `width` and `height` ship as fixed pixel numbers, so both are handed to
+CSS instead, because a pill has to size to its label. Those overrides live in
+`GlassPill.tsx`, not in the vendored file.
+
+Pill text measures 6.9:1 on the badge and 6.4:1 on the chips, so the glass does
+not cost legibility.
+
 **Vendored files are never edited.** Anything installed from a registry stays
 byte-for-byte upstream, and project-specific behaviour goes in a wrapper beside
 it (`Aurora.tsx` vendored, `AuroraBackdrop.tsx` ours). That is what makes
@@ -322,7 +379,7 @@ Non-negotiable, and all verified rather than assumed:
 
 | Item | Now | Ceiling |
 |---|---|---|
-| JS, gzipped | 167 kB | 200 kB |
+| JS, gzipped | 169 kB | 200 kB |
 | CSS, gzipped | ~4 kB | 10 kB |
 | Fonts, latin subset | 96 kB | 120 kB |
 
