@@ -1,0 +1,47 @@
+# Makes the FCC proxy callable from the hosted page.
+#
+# The proxy sends no CORS headers, so a browser on another origin refuses every
+# response from it. In development the Vite dev server sidesteps that by
+# forwarding same-origin requests; a static build has no such forwarder, so the
+# headers have to come from somewhere. They come from here.
+#
+# Two rules, and both are needed:
+#
+#   1. The preflight. The page sends `ngrok-skip-browser-warning`, and a custom
+#      header makes the request non-simple, so the browser sends an OPTIONS
+#      preflight first. The proxy would answer that with a 404 carrying no CORS
+#      headers and the real request would never be sent, so the policy answers
+#      the preflight itself and never forwards it.
+#   2. The response headers on everything else.
+#
+# Nothing here weakens the proxy. It is already public by design: post-build.sh
+# registers this same endpoint on chain as the extension's proxy URL, and every
+# endpoint the page touches (/info, /action/result/<id>) returns data that is
+# either already on chain or is a signed result meant to be relayed there.
+#
+# Usage:
+#   ngrok http 6674 --url https://<reserved-domain> \
+#     --traffic-policy-file web/ngrok-policy.yml
+
+on_http_request:
+  - expressions:
+      - "req.method == 'OPTIONS'"
+    actions:
+      - type: custom-response
+        config:
+          status_code: 204
+          headers:
+            # Deliberately no allow-origin here. The on_http_response rule below
+            # applies to this short-circuited response too, and a duplicated
+            # Access-Control-Allow-Origin is a CORS failure rather than a
+            # harmless repeat.
+            access-control-allow-methods: "GET, POST, OPTIONS"
+            access-control-allow-headers: "*"
+            access-control-max-age: "86400"
+
+on_http_response:
+  - actions:
+      - type: add-headers
+        config:
+          headers:
+            access-control-allow-origin: "*"

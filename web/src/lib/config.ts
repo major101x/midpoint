@@ -11,9 +11,37 @@ import { parseAbi } from "viem";
 export const RPC_URL = "https://coston2-api.flare.network/ext/C/rpc";
 export const EXPLORER = "https://coston2-explorer.flare.network";
 
-/** Proxied by Vite in development; the FCC proxy sends no CORS headers. */
-export const TEE_INFO_URL = "/tee/info";
-export const TEE_RESULT_URL = (id: string) => `/tee/action/result/${id}`;
+/**
+ * Base URL of the FCC proxy, with no trailing slash.
+ *
+ * Development leaves this unset and the value falls back to `/tee`, which the
+ * Vite dev server forwards to localhost:6674 (see `vite.config.ts`). That
+ * forwarder exists only in the dev server. A production build is three static
+ * files with nothing standing behind them, so a hosted page must be handed a
+ * real public URL at build time through `VITE_TEE_URL`, or every call here
+ * lands on the static host and 404s.
+ *
+ * The proxy is already public by design: `post-build.sh` registers this same
+ * endpoint on chain as the extension's proxy, so pointing the page at it
+ * exposes nothing that the registry does not already publish.
+ */
+export const TEE_BASE = (import.meta.env.VITE_TEE_URL ?? "/tee").replace(/\/+$/, "");
+export const TEE_INFO_URL = `${TEE_BASE}/info`;
+
+/**
+ * `fetch` for the proxy.
+ *
+ * @remarks The header is for ngrok, whose free tier answers anything that looks
+ * like a browser with an HTML interstitial instead of the response. That would
+ * surface here as JSON parsing failing on `<!DOCTYPE html>`, which is a
+ * genuinely confusing way to learn about it. The header is ngrok's documented
+ * opt-out and is ignored by every other host, including the dev proxy.
+ */
+export const teeFetch = (url: string, init: RequestInit = {}) =>
+  fetch(url, {
+    ...init,
+    headers: { ...init.headers, "ngrok-skip-browser-warning": "true" },
+  });
 
 export const CHAIN = {
   id: 114,

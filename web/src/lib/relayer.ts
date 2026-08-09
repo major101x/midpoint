@@ -44,16 +44,26 @@ export interface BatchResult {
 export async function awaitResult(
   proxyUrl: string,
   instructionId: string,
-  opts: { timeoutMs?: number; intervalMs?: number } = {},
+  opts: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    /**
+     * Injected so the caller can supply proxy-specific headers. Narrower than
+     * `typeof fetch` on purpose: this only ever receives a URL string, and the
+     * wide signature would force every caller to accept `Request` too.
+     */
+    fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+  } = {},
 ): Promise<ActionResultEnvelope> {
   const timeoutMs = opts.timeoutMs ?? 120_000;
   const intervalMs = opts.intervalMs ?? 3_000;
+  const doFetch = opts.fetchImpl ?? fetch;
   const deadline = Date.now() + timeoutMs;
   let lastError = "not found";
 
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${proxyUrl}/action/result/${instructionId}`);
+      const res = await doFetch(`${proxyUrl}/action/result/${instructionId}`);
       if (res.ok) {
         const text = await res.text();
         // The proxy returns a plain string, not JSON, when it has nothing yet.

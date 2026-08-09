@@ -1,0 +1,59 @@
+# Builds the web interface and publishes it to GitHub Pages.
+#
+# VITE_TEE_URL is set here rather than kept as a secret because it is not one:
+# post-build.sh registers this same endpoint on chain as the extension's proxy
+# URL, so it is already public in the TEE registry.
+#
+# VITE_BASE has to match the repository name. GitHub Pages serves a project site
+# from /<repo>/, and without the prefix every asset request 404s.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b
+      - run: npx vite build
+        env:
+          VITE_TEE_URL: https://thresa-nonchurchgoing-collins.ngrok-free.dev
+          VITE_BASE: /midpoint/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

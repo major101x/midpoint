@@ -21,6 +21,7 @@ import {
   EXPLORER,
   INSTRUCTION_FEE,
   RPC_URL,
+  TEE_BASE,
   TEE_INFO_URL,
   erc20Abi,
   fmt,
@@ -28,6 +29,7 @@ import {
   parseAmount,
   settlementAbi,
   short,
+  teeFetch,
   vaultAbi,
 } from "./lib/config";
 import { publicKeyFromInfo } from "./lib/ecies";
@@ -103,13 +105,18 @@ export default function App() {
   }, [account]);
 
   useEffect(() => {
-    fetch(TEE_INFO_URL)
+    teeFetch(TEE_INFO_URL)
       .then((r) => r.json())
       .then((info) => {
         setTeePubKey(publicKeyFromInfo(info.machineData.publicKey.x, info.machineData.publicKey.y));
         setTeeExtension(info.machineData.extensionId);
       })
-      .catch(() => setError("Cannot reach the enclave proxy. Is the stack running on port 6674?"));
+      .catch(() =>
+        setError(
+          `Cannot reach the enclave proxy at ${TEE_BASE}. The venue is live only while ` +
+            `its enclave is running, so this is expected outside a demo window.`,
+        ),
+      );
   }, []);
 
   useEffect(() => {
@@ -219,7 +226,9 @@ export default function App() {
       if (!ev) throw new Error("BatchClosed not found");
 
       setStatus("waiting for the enclave to clear and sign");
-      const result = decodeBatchResult(await awaitResult("/tee", ev.args.instructionId));
+      const result = decodeBatchResult(
+        await awaitResult(TEE_BASE, ev.args.instructionId, { fetchImpl: teeFetch }),
+      );
 
       setStatus("settling on chain");
       await tx({
