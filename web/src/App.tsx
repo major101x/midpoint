@@ -275,10 +275,11 @@ export default function App() {
           a blue rectangle rather than as light. */}
       <Hero mev={mev} batch={batch} />
 
-      <div className="container">
-      {/* One ruled sheet, not a stack of cards. See design.md section 5.5. */}
-      <div className="sheet">
-      <div className="sheet-row two">
+      {/* Ruled lines that run the full width of the page, not boxes drawn
+          around the content. See design.md section 4.2. */}
+      <div className="lattice">
+      <div className="lat-row">
+      <div className="container two">
         <section className="cell public">
           <h2>What the chain sees</h2>
           <dl>
@@ -312,8 +313,10 @@ export default function App() {
           </p>
         </section>
       </div>
+      </div>
 
-      <div className="sheet-row two">
+      <div className="lat-row">
+      <div className="container two">
         <section className="cell">
           <h2>Your balances</h2>
           <BalancePanel balances={balances} onDeposit={deposit} onWithdraw={withdraw} disabled={!!busy || !account} frozen={batch?.frozen} />
@@ -336,8 +339,10 @@ export default function App() {
           </p>
         </section>
       </div>
+      </div>
 
-      <div className="sheet-row">
+      <div className="lat-row">
+      <div className="container">
         <section className="cell">
         <h2>Clear the batch</h2>
         <p className="note">
@@ -370,8 +375,10 @@ export default function App() {
         </section>
       </div>
       </div>
+      </div>
 
-      <Footer />
+      <div className="container">
+        <Footer />
       </div>
     </div>
   );

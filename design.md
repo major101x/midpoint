@@ -190,11 +190,11 @@ Measured against the reference it was taken from:
 Kept deliberately near that ratio. Past roughly 2x it stops looking like a
 material property and starts looking like a highlight someone drew on.
 
-**Applied to the sheet and the glass MEV card**, and nothing else. Inputs,
-buttons and the side toggles keep plain borders, because the effect means
-"raised surface" and a 28px input is not one. When the section cards became
-cells of one ruled sheet (4.2) the sheen moved with them: one lit rectangle
-rather than six.
+**Applied to the glass MEV card, and nothing else.** It began on the six
+section cards, moved to the sheet that replaced them, and ended up here once
+the sheet lost its border too (4.2). The effect needs an edge to catch light
+on, and the lattice has rules rather than edges. One lit surface on the page
+is the right number anyway.
 
 Two implementation notes, both load-bearing:
 
@@ -208,19 +208,29 @@ Two implementation notes, both load-bearing:
 
 ### 4.2 The ruled sheet
 
-Content is divided by **ruled lines, not by stacked boxes**. One sheet with a
-hairline border, ruled internally into cells, over a faint square lattice.
+Content is divided by **dotted rules that run the full width and height of the
+page**, not by boxes drawn around it. The lines cross to form cells; content
+sits inside them, padded clear of the rules.
 
-Six bordered rounded rectangles read as six unrelated widgets that happen to
-share a page. A ruled sheet reads as one instrument, which is what this is.
-The lattice is texture only, at roughly 4% alpha, and is masked so it fades
-out rather than running under the footer.
+Three properties make it read as structure rather than as containers, and
+losing any one of them turns it back into boxes:
 
-The rules are drawn by the cells themselves (`border-top` between rows,
-`border-left` between columns) rather than by a gap-and-background trick, so
-every line is continuous and lands on an exact pixel. Below 820px the columns
-collapse and the vertical rule becomes a horizontal one, because a vertical
-rule with nothing beside it is just a stray mark.
+1. **The rules are full bleed.** Rows span the viewport, so their horizontal
+   lines run edge to edge rather than stopping at the content column. The two
+   outer verticals sit at the content edges and span the whole lattice, so they
+   read as one continuous rule passing behind everything.
+2. **Nothing has a fill.** No cell has a background. A ruled sheet with a
+   background is still a box; being able to see straight through it is the
+   point.
+3. **Dotted, not solid.** Solid hairlines at this density read as a table.
+
+Behind them is a faint square texture at roughly 4% alpha, masked so it fades
+rather than running under the footer. It is texture only and must stay far
+below the rules in contrast.
+
+Below 820px the columns collapse and the vertical rule becomes a horizontal
+one, because a vertical rule with nothing beside it is a stray mark. The outer
+verticals fall off screen at that width, which is correct for the same reason.
 
 **The semantic pair moved with the layout.** With no card borders left to
 colour, `--public` and `--private` are now legend swatches beside the two
