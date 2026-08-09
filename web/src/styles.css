@@ -99,9 +99,10 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* --- glass pills -----------------------------------------------------------
-   Chips and the hero badge sit on GlassSurface, so they pick up whatever is
-   behind them (the aurora, for the badge) instead of a flat fill. The
-   component supplies the surface; these rules supply the size and type. */
+   The header chips sit on GlassSurface rather than a flat fill. Both carry
+   live state (which enclave is answering, which account is connected), which
+   is why they survived while the decorative pills did not. The component
+   supplies the surface; these rules supply the size and type. */
 .glass-pill {
   display: inline-flex; width: auto !important; height: auto !important;
   border-radius: var(--radius-pill);
@@ -196,18 +197,6 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
   content: ""; position: absolute; inset: 0;
   background: var(--aurora-veil);
   pointer-events: none;
-}
-
-/* The badge above the headline. States where this is running, which is a fact
-   worth leading with when the whole claim rests on a real deployment. */
-.badge { margin-bottom: var(--space-5); }
-.badge .glass-surface__content {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-xs); color: var(--text-muted); letter-spacing: 0.01em;
-}
-.badge-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--private);
-  box-shadow: 0 0 0 3px var(--private-dim);
 }
 
 .kicker {
