@@ -1,0 +1,195 @@
+/**
+ * Midpoint design tokens.
+ *
+ * The single source of truth for colour, type, space, radius, elevation and
+ * motion. Components reference these and never hardcode a value, so a change
+ * here reaches the whole interface.
+ *
+ * Read `design.md` at the repository root before changing anything in this
+ * file. Two groups in particular are load-bearing and are documented there:
+ * the semantic pair (`--public` / `--private`) carries the product's central
+ * argument, and the aurora ramp is deliberately kept distinct from it.
+ */
+
+:root {
+  /* ---------------------------------------------------------------------
+     Surfaces. Near-black rather than pure black: #000 on an OLED panel makes
+     the edges of translucent cards visibly banded, and pure black with white
+     text is harsher to read for long stretches.
+     --------------------------------------------------------------------- */
+  --bg: #08090d;
+  --surface: #101319;
+  --surface-2: #171b23;
+  --surface-3: #1e232d;
+
+  /* Glass. Used for the hero card sitting over the aurora. The border is
+     brighter than a normal one because a translucent panel loses its edge
+     against a moving background. */
+  --glass-bg: rgba(23, 27, 35, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-blur: 18px;
+
+  --line: #252b36;
+  --line-strong: #333a48;
+
+  /* ---------------------------------------------------------------------
+     Text. `--text-muted` is the lightest grey that still clears 4.5:1 on
+     `--bg`. Do not go lighter for body copy; use `--text-faint` only for
+     incidental annotation at 12px and above.
+     --------------------------------------------------------------------- */
+  --text: #e8ecf3;      /* 16.8:1 on --bg */
+  --text-muted: #98a1b2;/*  7.7:1 on --bg, 7.2:1 on --surface */
+  --text-faint: #7b8598;/*  5.4:1 on --bg, 5.0:1 on --surface */
+
+  /* ---------------------------------------------------------------------
+     Semantic pair. LOAD-BEARING: these two encode the product's argument,
+     public versus private, and appear opposite each other throughout the
+     interface. Never reuse either for decoration, and never introduce a
+     third colour into that comparison.
+     --------------------------------------------------------------------- */
+  --public: #6aa9ff;
+  --private: #6ee7a8;
+  --public-dim: rgba(106, 169, 255, 0.14);
+  --private-dim: rgba(110, 231, 168, 0.14);
+
+  /* ---------------------------------------------------------------------
+     Aurora ramp. Ambient only: the moving glow behind the hero, and nothing
+     else. Deliberately deeper and more saturated than `--public` so that a
+     diffuse background wash is never mistaken for a public-data label.
+     --------------------------------------------------------------------- */
+  --aurora-1: #14306e;
+  --aurora-2: #1d4ed8;
+  --aurora-3: #2f6df0;
+  --aurora-4: #0e7fb8;
+  --aurora-veil: rgba(8, 9, 13, 0.62);
+
+  /* ---------------------------------------------------------------------
+     Accent. The venue's identity colour, and the sell side.
+     Three tokens because one hex cannot serve all three jobs accessibly:
+       --accent         identity, borders, large numerals (18px+ or bold)
+       --accent-strong  button fills carrying white text, 5.1:1
+       --accent-text    accent-coloured body copy on a dark surface, 9.5:1
+     --------------------------------------------------------------------- */
+  --accent: #e0466b;
+  --accent-strong: #c9345a;
+  --accent-text: #ff8fa6;
+  --accent-dim: rgba(224, 70, 107, 0.14);
+
+  --warn: #f5b544;
+  --danger: #ff6b81;
+
+  /* ---------------------------------------------------------------------
+     Type. Outfit for display, Inter for everything else. Both are bundled
+     through @fontsource, so the page makes no external font request and
+     renders identically offline.
+     --------------------------------------------------------------------- */
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  --text-xs: 0.75rem;    /* 12px, annotation */
+  --text-sm: 0.8125rem;  /* 13px, secondary */
+  --text-base: 0.9375rem;/* 15px, body */
+  --text-lg: 1.0625rem;  /* 17px, lead */
+  --text-xl: 1.375rem;   /* 22px, figures */
+  --text-2xl: 1.75rem;   /* 28px, section head */
+  --text-3xl: 2.25rem;   /* 36px */
+
+  /* The hero headline. Fluid so it never wraps awkwardly between 360px and
+     1280px, and never grows past the point where three lines stop fitting. */
+  --text-hero: clamp(2rem, 1.2rem + 3.4vw, 3.5rem);
+  --text-stat: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem);
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --leading-tight: 1.12;  /* display only */
+  --leading-snug: 1.35;
+  --leading-normal: 1.55; /* body, per the 1.5 to 1.75 guideline */
+
+  --tracking-tight: -0.022em; /* large display sizes need negative tracking */
+  --tracking-normal: 0;
+  --tracking-wide: 0.08em;    /* uppercase labels */
+
+  /* Reading measure. Body copy past roughly 70 characters loses the reader. */
+  --measure: 58ch;
+  --measure-tight: 24ch;
+
+  /* ---------------------------------------------------------------------
+     Space. A 4px base step, named by multiple rather than by t-shirt size so
+     the arithmetic stays obvious at a glance.
+     --------------------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glass: 0 24px 64px rgba(0, 0, 0, 0.5);
+  --glow-accent: 0 0 0 3px var(--accent-dim);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--public);
+
+  /* ---------------------------------------------------------------------
+     Motion. Micro-interactions stay inside 150 to 300ms. The aurora is the
+     one deliberate exception: slow enough to read as ambient rather than as
+     something demanding attention.
+     --------------------------------------------------------------------- */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --aurora-period: 24s;
+
+  /* Explicit scale, so stacking never becomes a bidding war of 9999s. */
+  --z-base: 0;
+  --z-aurora: 1;
+  --z-content: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 50;
+}
+
+/**
+ * Small screens.
+ *
+ * 15px is comfortable on a desktop monitor at arm's length and slightly tight
+ * on a phone, where 16px is the usual floor. Bumping the base token lifts
+ * every rule that derives from it rather than patching individual components.
+ */
+@media (max-width: 820px) {
+  :root {
+    --text-base: 1rem;
+    --measure: 100%;
+  }
+}
+
+/**
+ * Motion preference.
+ *
+ * A continuously animating background is exactly what this setting exists to
+ * suppress, so the aurora stops rather than slows. The gradient itself stays,
+ * because the look should survive without the movement.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}

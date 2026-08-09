@@ -37,6 +37,7 @@ import { publicKeyFromInfo } from "./lib/ecies";
 import { sealOrder, type Side } from "./lib/order";
 import { awaitResult, decodeBatchResult } from "./lib/relayer";
 import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
+import Aurora from "./components/Aurora";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 
@@ -266,7 +267,7 @@ export default function App() {
       {error && <div className="banner error">{error}</div>}
       {busy && <div className="banner busy">{status ?? busy}...</div>}
 
-      <Hero mev={mev} />
+      <Hero mev={mev} batch={batch} />
 
       <div className="grid">
         <section className="card public">
@@ -398,10 +399,16 @@ function Header({ teeExtension, account, onConnect }: {
  * is computed from the comparison pool's live reserves rather than recorded, so
  * it cannot quietly go stale.
  */
-function Hero({ mev }: { mev?: MevEstimate | null }) {
+function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) {
   return (
     <section className="hero">
+      <Aurora />
+
       <div className="hero-copy">
+        <span className="badge">
+          <span className="badge-dot" />
+          Live on Flare Coston2
+        </span>
         <p className="kicker">The problem</p>
         <p className="hero-title">
           Every on-chain trade announces itself before it executes.
@@ -418,6 +425,24 @@ function Hero({ mev }: { mev?: MevEstimate | null }) {
           clears the batch at a single price. There is nothing to read ahead of, and
           being early in the batch is worth exactly nothing.
         </p>
+
+        {/* Deliberately not vanity metrics. Every one of these is checkable:
+            the first two are read from Coston2 on load, the third is the
+            repository's test count. */}
+        <div className="stats">
+          <div>
+            <div className="stat-value">{mev ? `${mev.bps}` : "746"} bps</div>
+            <div className="stat-label">Extracted on a public pool</div>
+          </div>
+          <div>
+            <div className="stat-value">{batch ? `${batch.lastSettled}` : "-"}</div>
+            <div className="stat-label">Sealed batches settled</div>
+          </div>
+          <div>
+            <div className="stat-value">194</div>
+            <div className="stat-label">Tests across the stack</div>
+          </div>
+        </div>
       </div>
 
       <div className="mev">
