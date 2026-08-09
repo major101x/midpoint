@@ -84,12 +84,18 @@ contract NaiveAmm {
     /// who sets it tightly simply gets reverted instead of filled. Compare with
     /// the venue, where the order is not visible to extract from in the first
     /// place.
-    function swapBaseForQuote(uint256 amountIn, uint256 minOut) external returns (uint256 amountOut) {
+    function swapBaseForQuote(uint256 amountIn, uint256 minOut)
+        external
+        returns (uint256 amountOut)
+    {
         amountOut = _swap(true, amountIn, minOut);
     }
 
     /// @notice Buy base with `amountIn` quote.
-    function swapQuoteForBase(uint256 amountIn, uint256 minOut) external returns (uint256 amountOut) {
+    function swapQuoteForBase(uint256 amountIn, uint256 minOut)
+        external
+        returns (uint256 amountOut)
+    {
         amountOut = _swap(false, amountIn, minOut);
     }
 
@@ -117,12 +123,19 @@ contract NaiveAmm {
     /// @notice Average price actually paid or received, scaled by 1e6.
     /// @dev The number worth comparing between venues. `size` is always in base
     /// units and `quote` in quote units, whichever direction the swap ran.
-    function executionPrice(uint256 baseAmount, uint256 quoteAmount) external pure returns (uint256) {
+    function executionPrice(uint256 baseAmount, uint256 quoteAmount)
+        external
+        pure
+        returns (uint256)
+    {
         if (baseAmount == 0) return 0;
         return (quoteAmount * PRICE_SCALE) / baseAmount;
     }
 
-    function _swap(bool baseIn, uint256 amountIn, uint256 minOut) private returns (uint256 amountOut) {
+    function _swap(bool baseIn, uint256 amountIn, uint256 minOut)
+        private
+        returns (uint256 amountOut)
+    {
         if (amountIn == 0) revert ZeroAmount();
         amountOut = quoteOut(baseIn, amountIn);
 
