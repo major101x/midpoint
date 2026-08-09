@@ -48,6 +48,10 @@ These two carry the argument. Rules:
 - Anything genuinely public renders in blue. Anything genuinely private renders
   in green. No exceptions for aesthetic convenience.
 
+They appear as legend swatches beside the two headings, and in the private
+panel's list items. They used to be coloured card borders; the cards are gone
+(4.2) but the rule survives the layout that carried it.
+
 ### 2.2 The aurora ramp, which is ambient only
 
 ```
@@ -145,6 +149,12 @@ copy past roughly 70 characters per line loses the reader.
 All figures use `font-variant-numeric: tabular-nums`. Prices, balances and basis
 points sit in columns, and columns only line up when digits share a width.
 
+**Form controls need `font: inherit` spelled out.** Buttons, inputs, selects and
+textareas do not inherit typography from their ancestors, so setting a face on
+`body` leaves every one of them in the browser's default. The page ran that way
+for several commits before anyone noticed, which is the usual outcome: it is
+easy to miss and obvious once seen.
+
 ---
 
 ## 4. Space, radius, elevation
@@ -180,9 +190,11 @@ Measured against the reference it was taken from:
 Kept deliberately near that ratio. Past roughly 2x it stops looking like a
 material property and starts looking like a highlight someone drew on.
 
-**Applied to panels only**: the six section cards and the glass MEV card.
-Inputs, buttons and the side toggles keep plain borders, because the effect
-means "raised surface" and a 28px input is not one.
+**Applied to the sheet and the glass MEV card**, and nothing else. Inputs,
+buttons and the side toggles keep plain borders, because the effect means
+"raised surface" and a 28px input is not one. When the section cards became
+cells of one ruled sheet (4.2) the sheen moved with them: one lit rectangle
+rather than six.
 
 Two implementation notes, both load-bearing:
 
@@ -194,10 +206,26 @@ Two implementation notes, both load-bearing:
   and the gradient only adds highlights, so the edge never vanishes where the
   gradient is transparent.
 
-**The public and private panels are excluded from the left edge** with
-`clip-path`. Their coloured left border is the semantic signal from section
-2.1, and a neutral highlight must never compete with it. The sheen runs along
-their other three sides.
+### 4.2 The ruled sheet
+
+Content is divided by **ruled lines, not by stacked boxes**. One sheet with a
+hairline border, ruled internally into cells, over a faint square lattice.
+
+Six bordered rounded rectangles read as six unrelated widgets that happen to
+share a page. A ruled sheet reads as one instrument, which is what this is.
+The lattice is texture only, at roughly 4% alpha, and is masked so it fades
+out rather than running under the footer.
+
+The rules are drawn by the cells themselves (`border-top` between rows,
+`border-left` between columns) rather than by a gap-and-background trick, so
+every line is continuous and lands on an exact pixel. Below 820px the columns
+collapse and the vertical rule becomes a horizontal one, because a vertical
+rule with nothing beside it is just a stray mark.
+
+**The semantic pair moved with the layout.** With no card borders left to
+colour, `--public` and `--private` are now legend swatches beside the two
+headings. That suits a ruled sheet better than a coloured edge and keeps the
+signal exactly as load-bearing as section 2.1 requires.
 
 ---
 

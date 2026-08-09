@@ -276,8 +276,10 @@ export default function App() {
       <Hero mev={mev} batch={batch} />
 
       <div className="container">
-      <div className="grid">
-        <section className="card public">
+      {/* One ruled sheet, not a stack of cards. See design.md section 5.5. */}
+      <div className="sheet">
+      <div className="sheet-row two">
+        <section className="cell public">
           <h2>What the chain sees</h2>
           <dl>
             <Row k="Batch" v={batch ? `#${batch.id}` : "-"} />
@@ -294,7 +296,7 @@ export default function App() {
           )}
         </section>
 
-        <section className="card private">
+        <section className="cell private">
           <h2>What only the enclave sees</h2>
           <ul className="hidden-list">
             <li>Which side you took</li>
@@ -311,8 +313,8 @@ export default function App() {
         </section>
       </div>
 
-      <div className="grid">
-        <section className="card">
+      <div className="sheet-row two">
+        <section className="cell">
           <h2>Your balances</h2>
           <BalancePanel balances={balances} onDeposit={deposit} onWithdraw={withdraw} disabled={!!busy || !account} frozen={batch?.frozen} />
           <p className="note">
@@ -321,7 +323,7 @@ export default function App() {
           </p>
         </section>
 
-        <section className="card">
+        <section className="cell">
           <h2>Place a sealed order</h2>
           <OrderForm
             onSubmit={submit}
@@ -335,7 +337,8 @@ export default function App() {
         </section>
       </div>
 
-      <section className="card">
+      <div className="sheet-row">
+        <section className="cell">
         <h2>Clear the batch</h2>
         <p className="note">
           Closing is permissionless: anyone may close a batch once its window has
@@ -364,7 +367,9 @@ export default function App() {
             </div>
           </div>
         )}
-      </section>
+        </section>
+      </div>
+      </div>
 
       <Footer />
       </div>

@@ -40,6 +40,19 @@
   --line-strong: #333a48;
 
   /* ---------------------------------------------------------------------
+     The lattice. Content is divided by ruled lines rather than by stacked
+     boxes: one continuous grid, the way a drawing sheet is ruled.
+
+     `--rule` is the structural line that actually separates content.
+     `--grid-line` is the faint square lattice behind it, which is texture and
+     nothing more, so it sits far below the threshold where it would compete
+     with the rules or with text.
+     --------------------------------------------------------------------- */
+  --rule: #232935;
+  --grid-line: rgba(150, 170, 210, 0.045);
+  --grid-cell: 64px;
+
+  /* ---------------------------------------------------------------------
      Text. `--text-muted` is the lightest grey that still clears 4.5:1 on
      `--bg`. Do not go lighter for body copy; use `--text-faint` only for
      incidental annotation at 12px and above.
