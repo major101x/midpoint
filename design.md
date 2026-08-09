@@ -190,39 +190,47 @@ honest, so it is called out here.
 
 ### 5.3 The aurora
 
-Three blurred radial blobs drifting on long, mutually prime periods (24s, 32.9s,
-43s), so the composite never visibly repeats.
+**React Bits' Aurora** (`reactbits.dev`, MIT), ported from the upstream JSX to
+TypeScript in `web/src/components/Aurora.tsx`. Simplex noise drives a height
+field, which is ramped through three colour stops and faded with a smoothstep,
+rendered through OGL. The shader is kept verbatim so it stays comparable with
+upstream.
 
-**Implemented in CSS, not with React Bits.** React Bits' Aurora was the obvious
-candidate and was rejected on cost: it pulls in OGL and runs a WebGL context
-with a fragment shader every frame for as long as the page is open. This is a
-trading interface that people leave sitting in a tab. The effect wanted is a
-slow ambient wash, which three `filter: blur()` layers reproduce closely enough
-that the difference is not visible at rest.
+A CSS approximation using blurred radial gradients was tried first and thrown
+away. It read as a flat blue rectangle rather than as light, which is the whole
+reason to have the effect at all. The noise field is what makes it look like
+anything.
 
-Animating only `transform` keeps the work on the compositor, off the main
-thread, and off the CPU entirely when the tab is hidden.
+Two things are added that upstream does not have:
 
-Three constraints the implementation has to satisfy, each learned by getting it
+- **`prefers-reduced-motion`.** Upstream animates unconditionally. Here the
+  render loop stops and a single frame is drawn, so the aurora is present but
+  still.
+- **Pausing while the tab is hidden.** `requestAnimationFrame` is already
+  throttled when backgrounded, but the loop is cancelled outright on
+  `visibilitychange` rather than left to the browser.
+
+Colour stops are read from `--aurora-*` at mount rather than repeated in the
+component, so the tokens stay the single source of truth.
+
+Four constraints the implementation has to satisfy, each learned by getting it
 wrong first:
 
-1. **The hero clips the aurora** (`overflow: hidden`). This keeps the glow off
-   the panels below, which is the part of the reference deliberately not copied,
-   and stops the oversized blob box widening the page into a horizontal
-   scrollbar.
-2. **The mask fades on every side.** With a hard clip and no mask, the glow
-   meets the hero boundary while still bright and draws a visible rectangle.
-3. **Both hero columns are positioned** (`position: relative; z-index`). A
+1. **Full bleed.** `.hero-band` spans the viewport and carries the canvas;
+   `.hero` is the contained grid on top. Confining the glow to the 1080px
+   content column was what made it read as a rectangle.
+2. **The canvas is flipped** (`transform: scaleY(-1)`). The shader's intensity
+   rises with `uv.y`, and `uv.y` is 0 at the bottom in GL coordinates, so
+   upstream draws its band at the top. The reference has light rising from
+   below. Flipping the canvas rather than editing the shader keeps the shader
+   comparable with upstream.
+3. **The mask fades in at the top and back out at the bottom.** Without the
+   second fade the glow is still at full strength when `.hero-band` clips it,
+   which draws a hard horizontal line across the page.
+4. **Both hero columns are positioned** (`position: relative; z-index`). A
    static element does not participate in z-ordering against a positioned
-   sibling, so without this the aurora paints over the copy and washes it out.
-   This was the actual cause of what first looked like a contrast problem.
-
-The glow blooms into a band of empty space below the content, which is why the
-hero carries 5rem of bottom padding. Without that room the aurora has to sit
-under the text, where it either gets dimmed into invisibility or eats the copy.
-
-Under `prefers-reduced-motion: reduce` the drift stops completely. The gradient
-stays: the look must not depend on the movement.
+   sibling, so without this the aurora paints over the copy. This looked exactly
+   like a contrast problem and was not one.
 
 ---
 
@@ -248,13 +256,14 @@ Non-negotiable, and all verified rather than assumed:
 
 | Item | Now | Ceiling |
 |---|---|---|
-| JS, gzipped | 152 kB | 200 kB |
+| JS, gzipped | 167 kB | 200 kB |
 | CSS, gzipped | ~4 kB | 10 kB |
 | Fonts, latin subset | 96 kB | 120 kB |
-| Continuously running canvases | 0 | 0 |
 
-That last row is a rule, not a measurement. If an effect needs a canvas running
-forever, it needs a better reason than this one had.
+The aurora runs a WebGL context, which is a real cost on a page people leave
+open. It is accepted rather than ignored, and paid down in the two ways
+available: the loop stops when the tab is hidden, and it never starts under
+`prefers-reduced-motion`. A second animated canvas would not be affordable.
 
 ---
 

@@ -38,7 +38,11 @@ body {
   border-radius: var(--radius-sm);
 }
 
-.app { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+.page { overflow-x: clip; } /* backstop: nothing full-bleed may scroll the page */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.page > .container:first-child { padding-top: 32px; }
+.page > .container:last-child { padding-bottom: 64px; }
+@media (max-width: 640px) { .container { padding: 0 16px; } }
 
 header {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -78,65 +82,33 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 @media (max-width: 820px) { .hero { grid-template-columns: 1fr; } }
 
 /* --- aurora ---------------------------------------------------------------
-   Sits behind the hero, bleeding upward from the lower edge. Clipped to its
-   own box so the glow never washes over the panels below, which is the part
-   of the reference we are deliberately not copying. */
+   Full bleed behind the hero. The canvas spans the viewport while the copy
+   stays inside `.container`, because confining the glow to the content column
+   made it read as a blue rectangle rather than as light. */
 .aurora {
   position: absolute; inset: 0; z-index: var(--z-aurora);
   pointer-events: none;
-  /* Fades to nothing on every side. Without this the clip applied by `.hero`
-     shows up as a hard rectangle wherever the glow is still bright when it
-     meets the edge, which is worse than no glow at all. */
-  -webkit-mask-image: radial-gradient(ellipse 86% 76% at 50% 100%, #000 0%, #000 38%, transparent 82%);
-  mask-image: radial-gradient(ellipse 86% 76% at 50% 100%, #000 0%, #000 38%, transparent 82%);
+  /* Fades in at the top and back out at the bottom. Without the second fade
+     the glow is still at full strength when `.hero-band` clips it, which draws
+     a hard horizontal line across the page. */
+  -webkit-mask-image: linear-gradient(
+    to bottom, transparent 0%, rgba(0,0,0,0.45) 36%, #000 66%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(
+    to bottom, transparent 0%, rgba(0,0,0,0.45) 36%, #000 66%, #000 84%, transparent 100%);
 }
+/* The shader draws its band at the top of the canvas (intensity rises with
+   uv.y, and uv.y is 0 at the bottom in GL coordinates). The reference has the
+   light rising from below, so the canvas is flipped rather than the shader
+   edited: keeping the shader verbatim means it stays comparable with upstream. */
+.aurora-canvas { width: 100%; height: 100%; transform: scaleY(-1); }
 
-/* Both hero columns must be positioned to sit above the aurora. Static
-   elements do not participate in z-ordering against a positioned sibling, so
-   without this the glow paints straight over the copy and washes it out. */
-.hero-copy, .mev { position: relative; z-index: var(--z-content); }
-
-.aurora-blob {
-  position: absolute; border-radius: 50%;
-  filter: blur(64px);
-  will-change: transform;
-}
-.aurora-1 {
-  width: 58%; height: 70%; left: -8%; bottom: -34%;
-  background: var(--aurora-2); opacity: 0.8;
-  animation: drift-1 var(--aurora-period) ease-in-out infinite alternate;
-}
-.aurora-2 {
-  width: 52%; height: 64%; left: 28%; bottom: -38%;
-  background: var(--aurora-3); opacity: 0.66;
-  animation: drift-2 calc(var(--aurora-period) * 1.37) ease-in-out infinite alternate;
-}
-.aurora-3 {
-  width: 46%; height: 58%; right: -6%; bottom: -30%;
-  background: var(--aurora-4); opacity: 0.46;
-  animation: drift-3 calc(var(--aurora-period) * 1.79) ease-in-out infinite alternate;
-}
 /* Knocks the saturation back so text over the glow stays legible. Tuned
-   against the muted body copy, which is the lowest-contrast text sitting on
-   the glow, not against the headline. */
-.aurora-veil { position: absolute; inset: 0; background: var(--aurora-veil); }
-
-/* Only transform and opacity, so this stays on the compositor. */
-@keyframes drift-1 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(14%, -8%, 0) scale(1.18); }
-}
-@keyframes drift-2 {
-  from { transform: translate3d(0, 0, 0) scale(1.06); }
-  to   { transform: translate3d(-16%, -12%, 0) scale(0.9); }
-}
-@keyframes drift-3 {
-  from { transform: translate3d(0, 0, 0) scale(0.94); }
-  to   { transform: translate3d(-10%, -6%, 0) scale(1.14); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora-blob { animation: none; }
+   against the muted body copy, which is the lowest-contrast text on the
+   glow, not against the headline. */
+.aurora::after {
+  content: ""; position: absolute; inset: 0;
+  background: var(--aurora-veil);
+  pointer-events: none;
 }
 
 /* The badge above the headline. States where this is running, which is a fact

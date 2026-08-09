@@ -261,14 +261,20 @@ export default function App() {
     : 0;
 
   return (
-    <div className="app">
-      <Header teeExtension={teeExtension} account={account} onConnect={connect} />
+    <div className="page">
+      <div className="container">
+        <Header teeExtension={teeExtension} account={account} onConnect={connect} />
 
-      {error && <div className="banner error">{error}</div>}
-      {busy && <div className="banner busy">{status ?? busy}...</div>}
+        {error && <div className="banner error">{error}</div>}
+        {busy && <div className="banner busy">{status ?? busy}...</div>}
+      </div>
 
+      {/* Full bleed: the aurora spans the viewport, the copy stays in the
+          container. Boxing the glow inside the content column made it read as
+          a blue rectangle rather than as light. */}
       <Hero mev={mev} batch={batch} />
 
+      <div className="container">
       <div className="grid">
         <section className="card public">
           <h2>What the chain sees</h2>
@@ -360,6 +366,7 @@ export default function App() {
       </section>
 
       <Footer />
+      </div>
     </div>
   );
 }
@@ -401,9 +408,12 @@ function Header({ teeExtension, account, onConnect }: {
  */
 function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) {
   return (
-    <section className="hero">
-      <Aurora />
+    <section className="hero-band">
+      <div className="aurora" aria-hidden="true">
+        <Aurora amplitude={1.1} blend={0.62} speed={0.85} />
+      </div>
 
+      <div className="container hero">
       <div className="hero-copy">
         <span className="badge">
           <span className="badge-dot" />
@@ -483,6 +493,7 @@ function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) 
             </div>
           </>
         )}
+      </div>
       </div>
     </section>
   );
