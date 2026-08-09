@@ -329,8 +329,21 @@ page. `width` and `height` ship as fixed pixel numbers, so both are handed to
 CSS instead, because a pill has to size to its label. Those overrides live in
 `GlassPill.tsx`, not in the vendored file.
 
-Pill text measures 6.9:1 on the badge and 6.4:1 on the chips, so the glass does
-not cost legibility.
+**`color-scheme: dark` is required for any of this to be visible**, and its
+absence is worth recording because the symptom points nowhere near the cause.
+GlassSurface paints its rim highlights through `light-dark()`. With no
+`color-scheme` declared, a page defaults to light no matter how dark its own
+colours are, so those highlights resolved to black on a black page and the
+pills rendered as flat dark blobs with no glass at all. The fix is one
+declaration on `:root`, not tuning the component's numbers.
+
+Worth knowing what glass can and cannot do here: on a flat near-black backdrop
+there is nothing behind the pill to refract, so what reads as glass is the
+frost plus the rim light. The distortion only shows where something sits
+behind, which on this page means the hero.
+
+Pill text measures 7.6:1 on the badge and 6.7:1 on the chips, so the glass
+costs no legibility.
 
 **Vendored files are never edited.** Anything installed from a registry stays
 byte-for-byte upstream, and project-specific behaviour goes in a wrapper beside

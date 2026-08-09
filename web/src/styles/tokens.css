@@ -12,6 +12,13 @@
  */
 
 :root {
+  /* This interface is dark only, and saying so has consequences beyond the
+     scrollbars and native form controls: any CSS using `light-dark()` resolves
+     against it. GlassSurface styles its rim highlights that way, so without
+     this it paints them black on a black page and the glass disappears.
+     Declaring it is the fix, not tuning the component's numbers. */
+  color-scheme: dark;
+
   /* ---------------------------------------------------------------------
      Surfaces. Near-black rather than pure black: #000 on an OLED panel makes
      the edges of translucent cards visibly banded, and pure black with white
