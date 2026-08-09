@@ -387,11 +387,16 @@ behind, which on this page means the hero.
 Pill text measures 7.6:1 on the badge and 6.7:1 on the chips, so the glass
 costs no legibility.
 
-`SpecularButton` replaced the crimson fills. Its settings live in
+`SpecularButton` is used **once**, on Connect wallet. Its settings live in
 `PrimaryButton.tsx`, which also drops both the idle animation and the pointer
-tracking under `prefers-reduced-motion`: each instance runs its own WebGL
-context and frame loop, so three buttons plus the aurora puts four on the page.
-That is well inside the browser limit but it is not free.
+tracking under `prefers-reduced-motion`, since each instance runs its own WebGL
+context and frame loop.
+
+Every other action uses `.btn-quiet`: an almost-transparent grey fill on a
+hairline border. One specular button and several quiet ones gives the page a
+single loudest thing, which is the point of having a loudest thing. Three of
+them competed, and the one that actually matters to a first-time visitor,
+connecting a wallet, was the one that got lost.
 
 **One documented deviation from the rule below.** `SpecularButton.tsx` needed a
 one-line change to compile: it derives a `steer` boolean that implies
@@ -451,14 +456,12 @@ Non-negotiable, and all verified rather than assumed:
 | CSS, gzipped | ~4 kB | 10 kB |
 | Fonts, latin subset | 96 kB | 120 kB |
 
-Four WebGL contexts now: the aurora and one per specular button. That is well
-inside the browser's limit, but it is a real cost on a page people leave open,
-so it is paid down where possible. The aurora stops when the tab is hidden and
-never starts under `prefers-reduced-motion`; the buttons drop both their idle
-animation and their pointer tracking under the same setting.
+Two WebGL contexts: the aurora and the one specular button. The aurora stops
+when the tab is hidden and never starts under `prefers-reduced-motion`; the
+button drops its idle animation and pointer tracking under the same setting.
 
-Four is the ceiling. Anything else wanting a canvas has to replace one of
-these rather than join them.
+Two is the ceiling. Anything else wanting a canvas has to replace one of these
+rather than join them.
 
 ---
 

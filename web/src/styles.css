@@ -330,7 +330,7 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 .mev-fine { margin-top: 10px; font-size: 12px; line-height: 1.5; opacity: 0.75; }
 
 
-.note { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+.note { color: var(--muted); font-size: var(--text-base); margin: var(--space-3) 0 0; }
 .note.warn { color: var(--warn); }
 .muted { color: var(--muted); font-weight: 400; }
 .label { color: var(--muted); font-size: 12px; margin-top: 14px; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -341,9 +341,22 @@ button {
 }
 button:hover:not(:disabled) { border-color: #3a4150; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-/* The primary action is SpecularButton now, so there is no `.primary` rule
-   left to write. `--accent` stays for the sell side and the kicker. */
+/* Connect wallet is the only specular button: it is the one action a visitor
+   who has just arrived should notice. Everything else is quiet, so the page
+   has a single loudest thing rather than three competing ones. */
 .specular-button.sb-wide { width: 100%; margin-top: 14px; }
+
+.btn-quiet {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line-strong);
+  padding: 11px 18px;
+  font-weight: var(--weight-medium);
+}
+.btn-quiet:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: #48505f;
+}
+.btn-quiet.wide { width: 100%; }
 
 input {
   background: #0f1218; color: var(--text); border: 1px solid var(--line);
@@ -354,6 +367,9 @@ label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted
 label input { margin-top: 6px; }
 
 .row { display: flex; gap: 8px; align-items: center; }
+/* A control that follows an explanation needs a gap wide enough to read as a
+   separate step rather than as the next line of the paragraph. */
+.row.action { margin-top: var(--space-6); }
 .row input { flex: 1; }
 
 .asset { padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -391,7 +407,9 @@ dd { margin: 0; font-family: var(--font-mono); }
 }
 .settled div { margin-bottom: 4px; }
 
-footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); }
-.links { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
-.links a { color: var(--public); text-decoration: none; font-size: 13px; font-family: var(--font-mono); }
-.links a:hover { text-decoration: underline; }
+/* Contract addresses, as a labelled list so the names and the hashes line up
+   in columns instead of running together as one blue stripe. */
+.contracts dd a {
+  color: var(--public); text-decoration: none; font-family: var(--font-mono);
+}
+.contracts dd a:hover { text-decoration: underline; }

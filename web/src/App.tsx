@@ -352,13 +352,14 @@ export default function App() {
           It cannot be closed instantly, because a batch of one order would leak
           that order's side at settlement.
         </p>
-        <div className="row">
-          <PrimaryButton
+        <div className="row action">
+          <button
+            className="btn-quiet"
             disabled={!!busy || !account || !batch || batch.orders === 0 || closeableIn > 0 || batch.closed}
             onClick={closeAndSettle}
           >
             {closeableIn > 0 ? `closeable in ${closeableIn}s` : "Close, clear and settle"}
-          </PrimaryButton>
+          </button>
         </div>
         {settled && (
           <div className="settled">
@@ -375,10 +376,12 @@ export default function App() {
         </section>
       </div>
       </div>
-      </div>
 
-      <div className="container">
+      <div className="lat-row">
+      <div className="container two">
         <Footer />
+      </div>
+      </div>
       </div>
     </div>
   );
@@ -612,29 +615,54 @@ function OrderForm({ onSubmit, disabled, available }: {
         <input value={size} onChange={(e) => setSize(e.target.value)} />
       </label>
       {problem && <p className="note warn">{problem}</p>}
-      <PrimaryButton wide disabled={disabled} onClick={go}>Seal and submit</PrimaryButton>
+      <button className="btn-quiet wide" disabled={disabled} onClick={go}>Seal and submit</button>
     </>
   );
 }
 
+/**
+ * Two columns of the same weight: what is deployed, and what is not real about
+ * it. The disclosure sits beside the addresses rather than under them as an
+ * afterthought, because it is the same kind of fact.
+ */
 function Footer() {
-  const link = (label: string, addr: string) => (
-    <a href={`${EXPLORER}/address/${addr}`} target="_blank" rel="noreferrer">{label} {short(addr, 6, 4)}</a>
-  );
+  const contracts: [string, string][] = [
+    ["Vault", ADDRESSES.vault],
+    ["OrderBook", ADDRESSES.orderBook],
+    ["Settlement", ADDRESSES.settlement],
+    ["Comparison pool", ADDRESSES.amm],
+  ];
   return (
-    <footer>
-      <div className="links">
-        {link("Vault", ADDRESSES.vault)}
-        {link("OrderBook", ADDRESSES.orderBook)}
-        {link("Settlement", ADDRESSES.settlement)}
-      </div>
-      <p className="note">
-        Running under simulated attestation for this demo, which is Flare's
-        documented development mode. The container, the encryption, the on-chain
-        registration and the instruction pipeline are all real; only the hardware
-        quote is simulated. Production is one environment variable away, on a
-        Confidential Space VM.
-      </p>
-    </footer>
+    <>
+      <section className="cell">
+        <h2>Deployed on Coston2</h2>
+        <dl className="contracts">
+          {contracts.map(([label, addr]) => (
+            <div className="dlrow" key={addr}>
+              <dt>{label}</dt>
+              <dd>
+                <a href={`${EXPLORER}/address/${addr}`} target="_blank" rel="noreferrer">
+                  {short(addr, 8, 6)}
+                </a>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="cell">
+        <h2>Attestation</h2>
+        <p className="note">
+          Running under simulated attestation for this demo, which is Flare's
+          documented development mode. The container, the encryption, the
+          on-chain registration and the instruction pipeline are all real; only
+          the hardware quote is simulated.
+        </p>
+        <p className="note">
+          Production is one environment variable away, on a Confidential Space
+          VM.
+        </p>
+      </section>
+    </>
   );
 }
