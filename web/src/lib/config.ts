@@ -57,6 +57,11 @@ export const ADDRESSES = {
   vault: "0x38F182C65415C9bBCA03420E256E8A9E957B72b2",
   orderBook: "0xDC1F76dD480EE9A3B4383a29a1C956E11E5326d4",
   settlement: "0xd064e426F10a8DC00E9892722c468C8A41e9Cb45",
+  /**
+   * The comparison pool, and deliberately not part of the venue. It exists so
+   * the cost of trading in the open can be measured rather than asserted.
+   */
+  amm: "0xE93DED1D2a9501Ad47F493a17a2BB1411148d408",
 } as const;
 
 /** Charged by the TEE extension registry per instruction. */
@@ -93,6 +98,11 @@ export const orderBookAbi = parseAbi([
   "function voidDelay() view returns (uint64)",
   "event OrderSubmitted(address indexed trader, uint256 indexed batchId, address indexed tee, bytes32 instructionId)",
   "event BatchClosed(uint256 indexed batchId, address indexed tee, uint32 orderCount, bytes32 instructionId)",
+]);
+
+export const ammAbi = parseAbi([
+  "function reserveBase() view returns (uint256)",
+  "function reserveQuote() view returns (uint256)",
 ]);
 
 export const settlementAbi = parseAbi([

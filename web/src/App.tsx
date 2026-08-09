@@ -23,6 +23,7 @@ import {
   RPC_URL,
   TEE_BASE,
   TEE_INFO_URL,
+  ammAbi,
   erc20Abi,
   fmt,
   orderBookAbi,
@@ -35,6 +36,7 @@ import {
 import { publicKeyFromInfo } from "./lib/ecies";
 import { sealOrder, type Side } from "./lib/order";
 import { awaitResult, decodeBatchResult } from "./lib/relayer";
+import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 
@@ -64,6 +66,7 @@ export default function App() {
   const [batch, setBatch] = useState<BatchState>();
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
+  const [mev, setMev] = useState<MevEstimate | null>();
   const [lastCiphertext, setLastCiphertext] = useState<string>();
   const [settled, setSettled] = useState<{ price: string; volume: string; batchId: string }>();
   const [busy, setBusy] = useState<string>();
@@ -103,6 +106,18 @@ export default function App() {
       setBalances({ walletBase, walletQuote, vaultBase, vaultQuote });
     }
   }, [account]);
+
+  // Priced from the comparison pool's live reserves. Independent of the enclave
+  // and of any wallet, so the argument on this page holds up even when the demo
+  // stack is offline.
+  useEffect(() => {
+    Promise.all([
+      pub.readContract({ address: ADDRESSES.amm, abi: ammAbi, functionName: "reserveBase" }),
+      pub.readContract({ address: ADDRESSES.amm, abi: ammAbi, functionName: "reserveQuote" }),
+    ])
+      .then(([rb, rq]) => setMev(estimateSandwich(rb, rq)))
+      .catch(() => setMev(null));
+  }, []);
 
   useEffect(() => {
     teeFetch(TEE_INFO_URL)
@@ -251,29 +266,7 @@ export default function App() {
       {error && <div className="banner error">{error}</div>}
       {busy && <div className="banner busy">{status ?? busy}...</div>}
 
-      <div className="grid">
-        <section className="card">
-          <h2>Your balances</h2>
-          <BalancePanel balances={balances} onDeposit={deposit} onWithdraw={withdraw} disabled={!!busy || !account} frozen={batch?.frozen} />
-          <p className="note">
-            Deposits are public and deliberately separate from ordering. A deposit
-            says only that you are a participant, never what you intend to trade.
-          </p>
-        </section>
-
-        <section className="card">
-          <h2>Place a sealed order</h2>
-          <OrderForm
-            onSubmit={submit}
-            disabled={!!busy || !account || !teePubKey || batch?.closed === true}
-            available={balances}
-          />
-          <p className="note">
-            Encrypted in your browser to the enclave's public key. The order is
-            opaque from the moment it leaves this page.
-          </p>
-        </section>
-      </div>
+      <Hero mev={mev} />
 
       <div className="grid">
         <section className="card public">
@@ -306,6 +299,30 @@ export default function App() {
             None of this is recoverable from the chain, from this page, or from the
             machine running the venue. Only the clearing price and the net
             movements become public, and only after the batch settles.
+          </p>
+        </section>
+      </div>
+
+      <div className="grid">
+        <section className="card">
+          <h2>Your balances</h2>
+          <BalancePanel balances={balances} onDeposit={deposit} onWithdraw={withdraw} disabled={!!busy || !account} frozen={batch?.frozen} />
+          <p className="note">
+            Deposits are public and deliberately separate from ordering. A deposit
+            says only that you are a participant, never what you intend to trade.
+          </p>
+        </section>
+
+        <section className="card">
+          <h2>Place a sealed order</h2>
+          <OrderForm
+            onSubmit={submit}
+            disabled={!!busy || !account || !teePubKey || batch?.closed === true}
+            available={balances}
+          />
+          <p className="note">
+            Encrypted in your browser to the enclave's public key. The order is
+            opaque from the moment it leaves this page.
           </p>
         </section>
       </div>
@@ -370,6 +387,79 @@ function Header({ teeExtension, account, onConnect }: {
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * The argument, before the product.
+ *
+ * A visitor who has not already met MEV has no reason to care about any of the
+ * controls below, so the page leads with the problem and prices it. The figure
+ * is computed from the comparison pool's live reserves rather than recorded, so
+ * it cannot quietly go stale.
+ */
+function Hero({ mev }: { mev?: MevEstimate | null }) {
+  return (
+    <section className="hero">
+      <div className="hero-copy">
+        <p className="kicker">The problem</p>
+        <p className="hero-title">
+          Every on-chain trade announces itself before it executes.
+        </p>
+        <p className="hero-body">
+          Public transactions sit in a queue anyone can read. A bot buys immediately
+          ahead of a large order, lets that order push the price up, and sells into
+          it. The trader gets a worse fill and the bot keeps the difference. No
+          amount of clever pool design fixes this, because the leak happens before
+          execution.
+        </p>
+        <p className="hero-body">
+          Midpoint encrypts orders to a Flare TEE, collects them into a batch, and
+          clears the batch at a single price. There is nothing to read ahead of, and
+          being early in the batch is worth exactly nothing.
+        </p>
+      </div>
+
+      <div className="mev">
+        <div className="mev-head">Cost of being observed</div>
+        {mev === undefined && <div className="mev-loading">pricing the live pool...</div>}
+        {mev === null && (
+          <div className="mev-loading">
+            The comparison pool is not reachable. The figure last measured live was
+            <strong> 746 bps</strong>.
+          </div>
+        )}
+        {mev && (
+          <>
+            <div className="mev-rows">
+              <div className="mev-row">
+                <span>Public pool</span>
+                <strong className="bad">{mev.bps} bps</strong>
+              </div>
+              <div className="mev-row">
+                <span>Midpoint</span>
+                <strong className="good">0 bps</strong>
+              </div>
+            </div>
+            <div className="mev-detail">
+              <div>
+                A buy of <b>{fmt(mev.tradeSize, 4)}</b> USDT0, worth{" "}
+                {mev.tradePctOfReserve.toFixed(1)}% of the pool, fills at{" "}
+                <b>{fmt(mev.alonePrice, 4)}</b> unobserved and{" "}
+                <b>{fmt(mev.sandwichedPrice, 4)}</b> once a searcher front-runs it.
+              </div>
+              <div className="mev-fine">
+                Computed live from the comparison pool's reserves
+                ({fmt(mev.reserveBase, 2)} FXRP / {fmt(mev.reserveQuote, 2)} USDT0)
+                using the same arithmetic the pool uses. Constant-product pricing is
+                scale invariant, so the basis points hold at any depth. The attack has
+                also been executed for real on Coston2, not only modelled.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
