@@ -71,17 +71,17 @@ The aurora appears behind the hero and nowhere else.
 
 One hex cannot do three jobs and stay accessible, so there are three:
 
-| Token | Use | Contrast |
-|---|---|---|
-| `--accent` `#e0466b` | identity, borders, large numerals | 4.66:1 on `--surface` |
-| `--accent-text` `#ff8fa6` | accent-coloured body copy | 9.22:1 on `--bg` |
+One token: `--accent` `#e0466b`, at 4.66:1 on `--surface`. It marks the sell
+side and the losing figure in the MEV panel, and nothing else. It survived
+because both of those are genuinely adverse; the decorative uses did not.
 
-There used to be a third, `--accent-strong` `#c9345a`, because white on
-`--accent` measures 3.99:1 and fails AA for button text at that size. The
-primary action is SpecularButton now and nothing on the page is filled with
-crimson, so the token went. **The measurement still stands**: if a crimson
-fill with white text ever comes back, it needs the darker shade, not
-`--accent`.
+Two siblings have been removed as their last users went away. **Both
+measurements still stand, and neither should be reinvented by eye:**
+
+| Removed | Value | Why it existed |
+|---|---|---|
+| `--accent-strong` | `#c9345a` | White on `--accent` is 3.99:1 and fails AA for button text. A crimson fill carrying white text needs the darker shade. |
+| `--accent-text` | `#ff8fa6` | Accent-coloured body copy on `--bg`, 9.22:1. `--accent` itself is too dark to read as running text. |
 
 ### 2.4 Surfaces and text
 

@@ -85,15 +85,16 @@
   --band-tint: #0d1424;
 
   /* ---------------------------------------------------------------------
-     Accent. The venue's identity colour, and the sell side.
-       --accent       identity, borders, large numerals (18px+ or bold)
-       --accent-text  accent-coloured body copy on a dark surface, 9.2:1
-     There was a third, --accent-strong, for button fills carrying white text.
-     The primary action is SpecularButton now and nothing is filled with
-     crimson, so it went rather than sit unused.
+     Accent. The sell side, and the losing figure in the MEV panel. Used only
+     where something is genuinely adverse, which is why it survived while the
+     decorative uses did not.
+
+     Two siblings have been removed as their users went away: --accent-strong
+     (#c9345a) for button fills carrying white text, and --accent-text
+     (#ff8fa6) for accent-coloured body copy. Both measurements are recorded in
+     design.md section 2.3; neither should be reinvented by eye.
      --------------------------------------------------------------------- */
   --accent: #e0466b;
-  --accent-text: #ff8fa6;
   --accent-dim: rgba(224, 70, 107, 0.14);
 
   --warn: #f5b544;

@@ -430,7 +430,6 @@ function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) 
 
       <div className="container hero">
       <div className="hero-copy">
-        <p className="kicker">The problem</p>
         <p className="hero-title">
           Every on-chain trade announces itself before it executes.
         </p>
