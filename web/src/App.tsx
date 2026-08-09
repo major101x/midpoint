@@ -39,6 +39,7 @@ import { awaitResult, decodeBatchResult } from "./lib/relayer";
 import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
 import AuroraBackdrop from "@/components/AuroraBackdrop";
 import GlassPill from "@/components/GlassPill";
+import PrimaryButton from "@/components/PrimaryButton";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 
@@ -352,13 +353,12 @@ export default function App() {
           that order's side at settlement.
         </p>
         <div className="row">
-          <button
-            className="primary"
+          <PrimaryButton
             disabled={!!busy || !account || !batch || batch.orders === 0 || closeableIn > 0 || batch.closed}
             onClick={closeAndSettle}
           >
             {closeableIn > 0 ? `closeable in ${closeableIn}s` : "Close, clear and settle"}
-          </button>
+          </PrimaryButton>
         </div>
         {settled && (
           <div className="settled">
@@ -405,7 +405,7 @@ function Header({ teeExtension, account, onConnect }: {
         {account ? (
           <GlassPill className="chip account">{short(account, 6, 4)}</GlassPill>
         ) : (
-          <button className="primary" onClick={onConnect}>Connect wallet</button>
+          <PrimaryButton onClick={onConnect}>Connect wallet</PrimaryButton>
         )}
       </div>
     </header>
@@ -612,7 +612,7 @@ function OrderForm({ onSubmit, disabled, available }: {
         <input value={size} onChange={(e) => setSize(e.target.value)} />
       </label>
       {problem && <p className="note warn">{problem}</p>}
-      <button className="primary wide" disabled={disabled} onClick={go}>Seal and submit</button>
+      <PrimaryButton wide disabled={disabled} onClick={go}>Seal and submit</PrimaryButton>
     </>
   );
 }

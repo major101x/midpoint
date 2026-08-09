@@ -74,12 +74,14 @@ One hex cannot do three jobs and stay accessible, so there are three:
 | Token | Use | Contrast |
 |---|---|---|
 | `--accent` `#e0466b` | identity, borders, large numerals | 4.66:1 on `--surface` |
-| `--accent-strong` `#c9345a` | button fills carrying white text | 5.09:1 with white |
 | `--accent-text` `#ff8fa6` | accent-coloured body copy | 9.22:1 on `--bg` |
 
-White on `--accent` measures 3.99:1, which fails AA for button text at this
-size. That is the entire reason `--accent-strong` exists. Do not "simplify" it
-away.
+There used to be a third, `--accent-strong` `#c9345a`, because white on
+`--accent` measures 3.99:1 and fails AA for button text at that size. The
+primary action is SpecularButton now and nothing on the page is filled with
+crimson, so the token went. **The measurement still stands**: if a crimson
+fill with white text ever comes back, it needs the darker shade, not
+`--accent`.
 
 ### 2.4 Surfaces and text
 
@@ -359,7 +361,8 @@ Two components come from that registry:
 | Component | Used for |
 |---|---|
 | `@react-bits/Aurora-TS-CSS` | the hero glow |
-| `@react-bits/GlassSurface-TS-CSS` | the header chips and the hero badge |
+| `@react-bits/GlassSurface-TS-CSS` | the header chips |
+| `@react-bits/SpecularButton-TS-CSS` | every primary action |
 
 `GlassSurface` needs three of its defaults overridden, and the first is not
 optional: `mixBlendMode` ships as `difference`, which inverts whatever sits
@@ -383,6 +386,19 @@ behind, which on this page means the hero.
 
 Pill text measures 7.6:1 on the badge and 6.7:1 on the chips, so the glass
 costs no legibility.
+
+`SpecularButton` replaced the crimson fills. Its settings live in
+`PrimaryButton.tsx`, which also drops both the idle animation and the pointer
+tracking under `prefers-reduced-motion`: each instance runs its own WebGL
+context and frame loop, so three buttons plus the aurora puts four on the page.
+That is well inside the browser limit but it is not free.
+
+**One documented deviation from the rule below.** `SpecularButton.tsx` needed a
+one-line change to compile: it derives a `steer` boolean that implies
+`pointerAngle != null`, but that narrowing does not survive the intermediate
+variable under `strict`, so `tsc -b` fails on it. Repeating the check inline is
+a no-op at runtime. It is marked in the file. Re-running `shadcn add` will
+overwrite it and the build will fail until it is reapplied.
 
 **Vendored files are never edited.** Anything installed from a registry stays
 byte-for-byte upstream, and project-specific behaviour goes in a wrapper beside
@@ -431,14 +447,18 @@ Non-negotiable, and all verified rather than assumed:
 
 | Item | Now | Ceiling |
 |---|---|---|
-| JS, gzipped | 169 kB | 200 kB |
+| JS, gzipped | 171 kB | 200 kB |
 | CSS, gzipped | ~4 kB | 10 kB |
 | Fonts, latin subset | 96 kB | 120 kB |
 
-The aurora runs a WebGL context, which is a real cost on a page people leave
-open. It is accepted rather than ignored, and paid down in the two ways
-available: the loop stops when the tab is hidden, and it never starts under
-`prefers-reduced-motion`. A second animated canvas would not be affordable.
+Four WebGL contexts now: the aurora and one per specular button. That is well
+inside the browser's limit, but it is a real cost on a page people leave open,
+so it is paid down where possible. The aurora stops when the tab is hidden and
+never starts under `prefers-reduced-motion`; the buttons drop both their idle
+animation and their pointer tracking under the same setting.
+
+Four is the ceiling. Anything else wanting a canvas has to replace one of
+these rather than join them.
 
 ---
 

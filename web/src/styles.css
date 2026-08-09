@@ -341,14 +341,9 @@ button {
 }
 button:hover:not(:disabled) { border-color: #3a4150; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-/* --accent-strong, not --accent: white on the lighter crimson measures
-   3.99:1, just under the 4.5:1 needed for button text this size. */
-button.primary {
-  background: var(--accent-strong); border-color: var(--accent-strong);
-  color: #fff; font-weight: var(--weight-medium);
-}
-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
-button.wide { width: 100%; margin-top: 14px; }
+/* The primary action is SpecularButton now, so there is no `.primary` rule
+   left to write. `--accent` stays for the sell side and the kicker. */
+.specular-button.sb-wide { width: 100%; margin-top: 14px; }
 
 input {
   background: #0f1218; color: var(--text); border: 1px solid var(--line);

@@ -86,13 +86,13 @@
 
   /* ---------------------------------------------------------------------
      Accent. The venue's identity colour, and the sell side.
-     Three tokens because one hex cannot serve all three jobs accessibly:
-       --accent         identity, borders, large numerals (18px+ or bold)
-       --accent-strong  button fills carrying white text, 5.1:1
-       --accent-text    accent-coloured body copy on a dark surface, 9.5:1
+       --accent       identity, borders, large numerals (18px+ or bold)
+       --accent-text  accent-coloured body copy on a dark surface, 9.2:1
+     There was a third, --accent-strong, for button fills carrying white text.
+     The primary action is SpecularButton now and nothing is filled with
+     crimson, so it went rather than sit unused.
      --------------------------------------------------------------------- */
   --accent: #e0466b;
-  --accent-strong: #c9345a;
   --accent-text: #ff8fa6;
   --accent-dim: rgba(224, 70, 107, 0.14);
 
