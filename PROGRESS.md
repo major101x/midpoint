@@ -43,7 +43,7 @@ Three containers running: `redis`, `ext-proxy`, `extension-tee`.
 ### Environment problems solved (not in the original plan)
 
 1. **No VPN needed for Coston2**, confirmed by Flare admin in Telegram. The prerequisite line in `docs/deployment-steps.md` is misleading.
-2. **Indexer DB credentials are required** and are not in the docs. Obtained from Flare in Telegram. Host is `34.38.42.208`; the `35.241.249.150` in `deployment-steps.md` is stale and unreachable.
+2. **Indexer DB credentials are required** and are not in the docs. Obtained from Flare in Telegram, along with a working host address: the one in `deployment-steps.md` is stale and unreachable. Host and credentials are deliberately not recorded here, since they are Flare's infrastructure and were shared privately. They live in the gitignored proxy config.
 3. **Docker Desktop was installed but stopped**, and the CLI defaulted to its socket. Started via `systemctl --user start docker-desktop`. It is `disabled` at boot, so this will recur after a reboot.
 4. **BuildKit could not reach the registry.** The host has no IPv6 default route, but BuildKit resolved `production.cloudfront.docker.com` to IPv6 and failed. Worked around by pre-pulling all pinned base images with `docker pull`, which uses the daemon's working IPv4 path, then building against the local cache.
 
