@@ -618,3 +618,60 @@ enclave pin and 3 for the out-of-band clearing price.
 ### Next
 
 Buffer and polish, then the video and the submission writeup.
+
+---
+
+## Day 13, 2026-08-09: a live link
+
+**Live at https://major101x.github.io/midpoint/, source at
+https://github.com/major101x/midpoint.**
+
+The interface had never been hostable. It reaches the FCC proxy through `/tee`,
+which is a Vite dev-server forwarder and nothing else, so a production build
+would have 404'd every call to it. Three things fixed that.
+
+**A configurable proxy base.** `VITE_TEE_URL` at build time, falling back to
+`/tee` so local development is unchanged.
+
+**CORS, at the tunnel.** The proxy sends no CORS headers. The page also sends
+`ngrok-skip-browser-warning`, and a custom header makes the request non-simple,
+so the browser sends an OPTIONS preflight that the proxy would answer with a
+bare 404. `web/ngrok-policy.yml` answers the preflight at ngrok and adds the
+header to everything else. One subtlety worth recording: the allow-origin header
+must be set in exactly one of the two rules. Setting it in both returns it twice,
+and a duplicated `Access-Control-Allow-Origin` is a CORS failure rather than a
+harmless repeat.
+
+**A base path.** Pages serves a project site from `/<repo>/`, so `VITE_BASE`
+has to match the repository name or every asset 404s.
+
+Publishing the proxy exposes nothing new. `post-build.sh` already registers that
+same URL on chain as the extension's proxy endpoint, and the endpoints the page
+touches return either public chain data or a signed result whose whole purpose is
+to be relayed on chain.
+
+### Verified in a real browser, not just with curl
+
+Loaded the live URL under Playwright: the enclave chip renders `0x...010198`,
+which is only possible if the cross-origin fetch to ngrok succeeded, and the page
+shows batch #5 with last settled #4 read from Coston2. One console error, a
+missing favicon, now fixed with an inlined SVG.
+
+### The limitation, stated plainly
+
+**The live link is only fully live while the enclave stack and the tunnel are
+running on the operator's machine**, because that is where the enclave is in FCC
+development mode. With them down the page still renders on-chain state from the
+public RPC; only sealing a new order needs the proxy. The error message says so.
+
+### Repository hygiene, done before going public
+
+- Scanned every tracked file for secrets before the first push. Clean: `.secrets/`, `extension/.env` and the coston2 proxy config were all already gitignored. The one private key in tracked files is the scaffold's own default, vendored from upstream and public already.
+- Redacted Flare's indexer host from this log. It was shared privately in Telegram and is Flare's infrastructure, not ours.
+- **`contracts/broadcast` was tracked again.** The day 12 commit that untracked it did not hold: `forge init` writes `!/broadcast` into `contracts/.gitignore`, which negates the root rule, so `git add -A` brought the files straight back and grew them from three to six. Removing the negation is the real fix. Same for `web/tsconfig.tsbuildinfo`.
+- First CI run against the new remote failed on `forge fmt --check`, three signatures in `NaiveAmm.sol` over the line limit. Formatted.
+
+### Next
+
+The comparison belongs in the interface, not only in a terminal script. Then the
+video and the submission writeup.
