@@ -158,9 +158,6 @@
   --radius-lg: 16px;
   --radius-xl: 22px;
   --radius-pill: 999px;
-  /* The hero band's bottom corners. Large enough to read as a deliberate
-     shape rather than as a softened rectangle. */
-  --radius-band: 40px;
 
   /* ---------------------------------------------------------------------
      Border sheen. A hairline lit at two opposite corners, as if one light

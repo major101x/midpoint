@@ -266,21 +266,22 @@ Three numbers where the reference puts vanity metrics:
 The first two update themselves. The third is the one number a human must keep
 honest, so it is called out here.
 
-### 5.3 The curve
+### 5.3 How the hero ends
 
-The band's bottom corners are rounded (`--radius-band`, 40px, 28px on phones)
-and the band clips its contents. The clip is the shape: the aurora runs bright
-all the way to the boundary, and the radius cuts it into a curve rather than a
-straight edge. An earlier version faded the glow out before the boundary, which
-avoided the hard line but also meant there was nothing left to curve.
+It fades. The band has no radius and no visible boundary: both the tint and the
+glow above it return to transparent before the band ends, so there is no edge
+and therefore no corner to shape.
 
-Two things have to be true for the curve to read, and both are easy to lose:
+An earlier version ended on a rounded clip instead, which solved the same
+problem (a hard horizontal line across the page) by giving the cut a shape
+rather than by removing it. A fade removes it.
 
-- **The mask must not fade out at the bottom.** It fades in at the top only.
-- **The band needs a tint of its own** (`--band-tint`), so the corners are
-  visible across the full width and not just where the aurora happens to be
-  bright. The band and the page are otherwise the same near-black, and a
-  rounded corner between two identical colours is invisible.
+Two things have to be true, and they are the mirror of what the curve needed:
+
+- **The aurora mask fades out at the bottom**, with a long tail. A short one
+  reads as a gradient band, which is a softer boundary rather than no boundary.
+- **The band's own tint fades too.** Leaving it opaque at the bottom would draw
+  the very line the fade exists to remove.
 
 ### 5.4 The aurora
 
