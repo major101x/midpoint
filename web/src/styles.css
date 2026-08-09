@@ -306,16 +306,16 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
   align-self: start;
 }
 .mev-head {
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--muted); margin-bottom: 12px;
+  font-size: var(--text-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--muted); margin-bottom: var(--space-4);
 }
-.mev-loading { color: var(--muted); font-size: 14px; }
+.mev-loading { color: var(--muted); font-size: var(--text-base); }
 
 .mev-rows { display: flex; flex-direction: column; gap: 8px; }
 .mev-row {
   display: flex; justify-content: space-between; align-items: baseline;
-  padding: var(--space-3) var(--space-3); border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.04); font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04); font-size: var(--text-base);
 }
 .mev-row span { color: var(--text-muted); }
 .mev-row strong {
@@ -325,9 +325,15 @@ h2 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacin
 .mev-row .bad { color: var(--accent); }
 .mev-row .good { color: var(--private); }
 
-.mev-detail { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.mev-detail { margin-top: var(--space-4); font-size: var(--text-base); color: var(--muted); }
 .mev-detail b { color: var(--text); font-family: var(--font-mono); font-weight: 500; }
-.mev-fine { margin-top: 10px; font-size: 12px; line-height: 1.5; opacity: 0.75; }
+/* The caveat. Subordinate to the figure above it, but it is the honest part
+   and has to stay readable, so it drops one step in size rather than being
+   dimmed as well: `--text-faint` already carries the hierarchy. */
+.mev-fine {
+  margin-top: var(--space-3); font-size: var(--text-sm);
+  line-height: var(--leading-normal); color: var(--text-faint);
+}
 
 
 .note { color: var(--muted); font-size: var(--text-base); margin: var(--space-3) 0 0; }

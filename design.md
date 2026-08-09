@@ -99,6 +99,12 @@ normal text. It was lightened rather than kept and excused, because it is used
 at 12px, and 12px is not large text under WCAG no matter how incidental the
 content feels.
 
+**Never dim text with `opacity` to push it down the hierarchy.** It composites
+against whatever is behind and puts the real contrast beyond the reach of these
+tokens, so the table above stops being true. The MEV panel's caveat did exactly
+that, at `opacity: 0.75` over `--text-muted`, which landed below where either
+token sits. Use `--text-faint`, or drop a size, or both.
+
 ---
 
 ## 3. Type
