@@ -37,7 +37,7 @@ import { publicKeyFromInfo } from "./lib/ecies";
 import { sealOrder, type Side } from "./lib/order";
 import { awaitResult, decodeBatchResult } from "./lib/relayer";
 import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
-import Aurora from "./components/Aurora";
+import AuroraBackdrop from "@/components/AuroraBackdrop";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
 
@@ -409,9 +409,7 @@ function Header({ teeExtension, account, onConnect }: {
 function Hero({ mev, batch }: { mev?: MevEstimate | null; batch?: BatchState }) {
   return (
     <section className="hero-band">
-      <div className="aurora" aria-hidden="true">
-        <Aurora amplitude={1.1} blend={0.62} speed={0.85} />
-      </div>
+      <AuroraBackdrop />
 
       <div className="container hero">
       <div className="hero-copy">

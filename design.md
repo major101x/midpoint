@@ -188,32 +188,59 @@ Three numbers where the reference puts vanity metrics:
 The first two update themselves. The third is the one number a human must keep
 honest, so it is called out here.
 
-### 5.3 The aurora
+### 5.3 The curve
 
-**React Bits' Aurora** (`reactbits.dev`, MIT), ported from the upstream JSX to
-TypeScript in `web/src/components/Aurora.tsx`. Simplex noise drives a height
-field, which is ramped through three colour stops and faded with a smoothstep,
-rendered through OGL. The shader is kept verbatim so it stays comparable with
-upstream.
+The band's bottom corners are rounded (`--radius-band`, 40px, 28px on phones)
+and the band clips its contents. The clip is the shape: the aurora runs bright
+all the way to the boundary, and the radius cuts it into a curve rather than a
+straight edge. An earlier version faded the glow out before the boundary, which
+avoided the hard line but also meant there was nothing left to curve.
+
+Two things have to be true for the curve to read, and both are easy to lose:
+
+- **The mask must not fade out at the bottom.** It fades in at the top only.
+- **The band needs a tint of its own** (`--band-tint`), so the corners are
+  visible across the full width and not just where the aurora happens to be
+  bright. The band and the page are otherwise the same near-black, and a
+  rounded corner between two identical colours is invisible.
+
+### 5.4 The aurora
+
+**React Bits' Aurora** (`reactbits.dev`, MIT), installed through the shadcn
+registry rather than pasted:
+
+```
+npx shadcn@latest add @react-bits/Aurora-TS-CSS
+```
+
+The `TS-CSS` variant, not `JS-CSS`: this codebase is TypeScript and `tsc -b`
+runs in the build, so a `.jsx` file would need `allowJs` for no benefit. Both
+variants are the same component.
+
+`web/src/components/Aurora.tsx` is vendored **verbatim and never edited**, so
+that command stays safe to re-run and upstream fixes arrive as a clean diff.
+Everything this project needs sits in `AuroraBackdrop.tsx` beside it, which
+wraps it and controls whether it is mounted at all:
+
+- Under `prefers-reduced-motion` the canvas is replaced with a static CSS
+  gradient. The hero keeps its depth, nothing moves.
+- While the tab is hidden the component unmounts, releasing the WebGL context
+  outright rather than leaving it alive on a throttled loop.
+
+Handling both by mounting rather than by patching the render loop is what keeps
+the vendored file pristine.
+
+Colour stops are read from `--aurora-*` at mount, so the tokens stay the single
+source of truth. `blend` is 0.28, well below the upstream default of 0.5: a wide
+smoothstep spreads the band into an even wash, and the shape of the light is the
+point.
 
 A CSS approximation using blurred radial gradients was tried first and thrown
 away. It read as a flat blue rectangle rather than as light, which is the whole
 reason to have the effect at all. The noise field is what makes it look like
 anything.
 
-Two things are added that upstream does not have:
-
-- **`prefers-reduced-motion`.** Upstream animates unconditionally. Here the
-  render loop stops and a single frame is drawn, so the aurora is present but
-  still.
-- **Pausing while the tab is hidden.** `requestAnimationFrame` is already
-  throttled when backgrounded, but the loop is cancelled outright on
-  `visibilitychange` rather than left to the browser.
-
-Colour stops are read from `--aurora-*` at mount rather than repeated in the
-component, so the tokens stay the single source of truth.
-
-Four constraints the implementation has to satisfy, each learned by getting it
+Three constraints the implementation has to satisfy, each learned by getting it
 wrong first:
 
 1. **Full bleed.** `.hero-band` spans the viewport and carries the canvas;
@@ -224,17 +251,56 @@ wrong first:
    upstream draws its band at the top. The reference has light rising from
    below. Flipping the canvas rather than editing the shader keeps the shader
    comparable with upstream.
-3. **The mask fades in at the top and back out at the bottom.** Without the
-   second fade the glow is still at full strength when `.hero-band` clips it,
-   which draws a hard horizontal line across the page.
-4. **Both hero columns are positioned** (`position: relative; z-index`). A
+3. **Both hero columns are positioned** (`position: relative; z-index`). A
    static element does not participate in z-ordering against a positioned
    sibling, so without this the aurora paints over the copy. This looked exactly
    like a contrast problem and was not one.
 
 ---
 
-## 6. Accessibility
+## 6. Components and the registry
+
+`web/components.json` configures the shadcn CLI, with the React Bits registry
+registered under the `@react-bits` namespace:
+
+```json
+"registries": { "@react-bits": "https://reactbits.dev/r/{name}.json" }
+```
+
+so components install by address rather than by copy and paste:
+
+```
+npx shadcn@latest add @react-bits/Aurora-TS-CSS
+```
+
+Two conventions come with that, and both are worth keeping:
+
+**Vendored files are never edited.** Anything installed from a registry stays
+byte-for-byte upstream, and project-specific behaviour goes in a wrapper beside
+it (`Aurora.tsx` vendored, `AuroraBackdrop.tsx` ours). That is what makes
+re-running `add` safe, and what makes an upstream fix a clean diff instead of a
+merge.
+
+**Imports resolve through `@/`.** The alias is declared in `tsconfig.json` and
+mirrored in `vite.config.ts`, because shadcn writes imports in that form.
+
+### What was not adopted
+
+shadcn's default token names (`--background`, `--foreground`, `--primary`) are
+deliberately not used. They describe a role in a generic UI kit; ours describe a
+role in this product, and `--public` and `--private` carry an argument that
+`--primary` and `--secondary` cannot. The tokens keep their names and their
+place in `styles/tokens.css`; the CLI is used for its registry and its file
+conventions, not its palette.
+
+Tailwind is likewise not installed. The `tailwind` block in `components.json`
+exists because the schema expects it, and points at `styles.css` so the CLI
+knows where the stylesheet lives. Every registry item used here is a `-CSS`
+variant, which ships plain CSS and needs no utility classes.
+
+---
+
+## 7. Accessibility
 
 Non-negotiable, and all verified rather than assumed:
 
@@ -252,7 +318,7 @@ Non-negotiable, and all verified rather than assumed:
 
 ---
 
-## 7. Performance budget
+## 8. Performance budget
 
 | Item | Now | Ceiling |
 |---|---|---|
@@ -267,7 +333,7 @@ available: the loop stops when the tab is hidden, and it never starts under
 
 ---
 
-## 8. Anti-patterns
+## 9. Anti-patterns
 
 Things that would be wrong here specifically:
 

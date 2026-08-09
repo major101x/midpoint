@@ -62,6 +62,7 @@
   --aurora-3: #2f6df0;
   --aurora-4: #0e7fb8;
   --aurora-veil: rgba(8, 9, 13, 0.28);
+  --band-tint: #0d1424;
 
   /* ---------------------------------------------------------------------
      Accent. The venue's identity colour, and the sell side.
@@ -137,6 +138,9 @@
   --radius-lg: 16px;
   --radius-xl: 22px;
   --radius-pill: 999px;
+  /* The hero band's bottom corners. Large enough to read as a deliberate
+     shape rather than as a softened rectangle. */
+  --radius-band: 40px;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.45);

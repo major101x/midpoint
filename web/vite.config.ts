@@ -1,3 +1,5 @@
+import { fileURLToPath, URL } from "node:url";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -7,6 +9,11 @@ export default defineConfig({
   // baked into asset URLs at build time or every script and stylesheet 404s.
   // Left at "/" for the dev server and for any root-domain host.
   base: process.env.VITE_BASE ?? "/",
+  // Matches the "@/*" path in tsconfig.json. shadcn resolves the aliases in
+  // components.json through it, so components land on imports that work.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   server: {
     // The FCC proxy runs on the operator's machine and sends no CORS headers,
     // so the browser cannot call it directly. Vite proxies it in development.
