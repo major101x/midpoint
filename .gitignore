@@ -17,3 +17,4 @@ broadcast/
 
 # node --experimental-* compile cache, named by hash
 0x*/
+.playwright-mcp/
