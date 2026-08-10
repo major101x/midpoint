@@ -39,6 +39,7 @@ import { awaitResult, decodeBatchResult } from "./lib/relayer";
 import { estimateSandwich, type MevEstimate } from "./lib/sandwich";
 import AuroraBackdrop from "@/components/AuroraBackdrop";
 import GlassPill from "@/components/GlassPill";
+import Logo from "@/components/Logo";
 import PrimaryButton from "@/components/PrimaryButton";
 
 const pub = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
@@ -395,7 +396,10 @@ function Header({ teeExtension, account, onConnect }: {
   return (
     <header>
       <div>
-        <h1>Midpoint</h1>
+        <div className="wordmark">
+          <Logo />
+          <h1>Midpoint</h1>
+        </div>
         <p className="tagline">
           A sealed-bid batch auction for FXRP. Orders are encrypted to a Flare
           TEE, cleared at one uniform price, and settled on Coston2.

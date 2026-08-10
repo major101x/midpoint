@@ -91,6 +91,11 @@ header {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 24px; flex-wrap: wrap; margin-bottom: 28px;
 }
+.wordmark { display: flex; align-items: center; gap: var(--space-3); }
+/* Optical alignment: the mark's rounded box reads as sitting slightly high
+   against the cap height of the wordmark, so it drops a hair. */
+.logo { display: block; flex: none; margin-top: 1px; }
+
 h1 {
   margin: 0; font-family: var(--font-display); font-size: var(--text-2xl);
   font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight);
