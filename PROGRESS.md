@@ -675,3 +675,49 @@ public RPC; only sealing a new order needs the proxy. The error message says so.
 
 The comparison belongs in the interface, not only in a terminal script. Then the
 video and the submission writeup.
+
+## Day 14, 2026-08-14: the mark, and an explainer video
+
+The header carries the mark now, the same drawing the favicon already used:
+two blocks, one `--public` and one `--private`, with the rule between them at
+the price they clear at. It is drawn from the tokens rather than repeated as
+hex, so a change to the semantic pair reaches it. `Logo.tsx` and the data URI
+in `index.html` have to move together, since a data URI cannot read custom
+properties.
+
+### `media/sandwich.mp4`, rendered rather than recorded
+
+A 36 second explainer telling the day 12 measurement on a single price axis:
+the fill when nobody is watching at 1.048538, the front-run dragging the pool,
+the fill you actually got at 1.133141, and the 747 bps between them. Then the
+same order sealed in the browser, opened inside the Confidential Extension,
+and cleared with the rest of the batch at one price.
+
+`media/sandwich.html` never reads the clock. Every visual state is a pure
+function of `t`, and `media/render.mjs` calls `window.__seek(t)` before each
+screenshot, so a slow machine produces the same file as a fast one and a
+re-render after an edit differs only where the edit was. The cost is that
+`requestAnimationFrame`, CSS transitions and CSS animations are all banned in
+that file; any of them would put wall clock timing back in and the captured
+frames would smear. Chrome comes from the system, so `playwright-core` is the
+only dependency and no browser is downloaded.
+
+Every figure on screen is from day 12 above. The three illustrative bids in the
+second half deliberately carry no numbers, so nothing on screen can be mistaken
+for a measurement that was not taken.
+
+### Layout notes worth keeping
+
+Three passes were needed, and all three faults were the same fault: elements
+placed by eye into space that another scene also wanted. Reading it back as
+rendered frames rather than trusting the coordinates caught the big figure
+sitting on the axis, a caption sitting on the order card, and a converging fill
+dot landing on its own label. The fix each time was to give each band of the
+frame one owner: captions above 260, the diagram between 280 and 580, the axis
+footnote at 660.
+
+### Next
+
+The recording and the submission writeup. Before either, the enclave stack and
+the tunnel have to come back up and a batch has to be run through, because
+batch #5 currently shows zero orders.
