@@ -783,6 +783,7 @@
       /* The renderer's only entry point. */
       window.__seek = (t) => render(t);
       window.__duration = DURATION;
+      window.__poster = 17.2;
 
       // A still, so opening the file in a browser shows something sensible.
       document.fonts.ready.then(() => render(17.2));

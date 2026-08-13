@@ -23,19 +23,20 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PAGE = resolve(HERE, "sandwich.html");
+
+// Which page to render: `node render.mjs story` renders story.html to
+// docs/story.mp4. Defaults to the original sandwich explainer.
+const NAME = process.argv[2] ?? "sandwich";
+const PAGE = resolve(HERE, `${NAME}.html`);
 // Frames are scratch and land under an ignored directory. The two finished
 // files go to docs/ with the rest of the material meant to be looked at.
 const FRAMES = resolve(HERE, "out/frames");
-const OUT = resolve(HERE, "../docs/sandwich.mp4");
-const POSTER = resolve(HERE, "../docs/sandwich-poster.png");
+const OUT = resolve(HERE, `../docs/${NAME}.mp4`);
+const POSTER = resolve(HERE, `../docs/${NAME}-poster.png`);
 
 const FPS = 30;
 const W = 1280;
 const H = 720;
-
-/** A frame X will use as the thumbnail if it picks one, and a good still. */
-const POSTER_T = 17.2;
 
 const CHROME = process.env.CHROME_PATH ?? "/usr/bin/google-chrome";
 
@@ -78,7 +79,10 @@ for (let i = 0; i < total; i++) {
   if (i % 60 === 0) process.stdout.write(`  ${i}/${total}\n`);
 }
 
-await page.evaluate((tt) => window.__seek(tt), POSTER_T);
+// The page picks its own poster frame; a still X will use as the thumbnail
+// if it takes one, and a good standalone image either way.
+const posterT = await page.evaluate(() => window.__poster ?? window.__duration / 2);
+await page.evaluate((tt) => window.__seek(tt), posterT);
 writeFileSync(POSTER, await page.screenshot({ type: "png" }));
 
 await browser.close();

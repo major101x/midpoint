@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Midpoint :: the envelope story</title>
+    <!--
+      The same measurement as sandwich.html, told for someone who has never
+      heard the word "basis point".
+
+      One metaphor carries the whole thing: a trade is a letter. On a public
+      exchange you send it on a postcard and everyone reads it in transit; on
+      Midpoint it travels in a sealed envelope and is opened inside a vault.
+      The only number a lay viewer has to hold is $747 out of $10,000, which
+      is the measured 747 bps restated at a size a person can feel. Constant
+      product pricing is scale invariant (PROGRESS.md day 12), so the
+      restatement is arithmetic, not embellishment.
+
+      Same rendering contract as sandwich.html: every visual state is a pure
+      function of `t`, `render.mjs` steps `window.__seek(t)` and screenshots.
+      No requestAnimationFrame, no CSS transitions, no CSS animations; all
+      three would put wall clock timing back in and the frames would smear.
+
+      Layout bands, one owner each, learned the hard way on the first video:
+      captions own y < 260, the stage owns 280 to 600, the footnote owns 660.
+    -->
+    <style>
+      @font-face {
+        font-family: "Outfit";
+        font-weight: 400;
+        src: url("./fonts/outfit-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Outfit";
+        font-weight: 600;
+        src: url("./fonts/outfit-latin-600-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 400;
+        src: url("./fonts/inter-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 500;
+        src: url("./fonts/inter-latin-500-normal.woff2") format("woff2");
+      }
+
+      /* Mirrors web/src/styles/tokens.css. A copy rather than an import
+         because this file is opened over file:// by the renderer. */
+      :root {
+        color-scheme: dark;
+        --bg: #08090d;
+        --surface: #101319;
+        --surface-2: #171b23;
+        --line: #252b36;
+        --line-strong: #333a48;
+        --grid-line: rgba(150, 170, 210, 0.045);
+        --text: #e8ecf3;
+        --text-muted: #98a1b2;
+        --text-faint: #7b8598;
+        --public: #6aa9ff;
+        --private: #6ee7a8;
+        --accent: #e0466b;
+        --warn: #f5b544;
+        --font-display: "Outfit", sans-serif;
+        --font-body: "Inter", sans-serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      #stage {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+        background: var(--bg);
+        font-family: var(--font-body);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          repeating-linear-gradient(
+            to right,
+            var(--grid-line) 0 1px,
+            transparent 1px 64px
+          ),
+          repeating-linear-gradient(
+            to bottom,
+            var(--grid-line) 0 1px,
+            transparent 1px 64px
+          );
+      }
+
+      #wash {
+        position: absolute;
+        inset: -20%;
+        background: radial-gradient(
+          46% 40% at 52% 46%,
+          rgba(29, 78, 216, 0.22),
+          rgba(8, 9, 13, 0) 70%
+        );
+      }
+
+      #svg {
+        position: absolute;
+        inset: 0;
+      }
+
+      .lay {
+        position: absolute;
+        inset: 0;
+      }
+
+      #brand {
+        position: absolute;
+        left: 72px;
+        top: 48px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      #brand span {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+      }
+
+      #chain {
+        position: absolute;
+        right: 72px;
+        top: 54px;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      #caption {
+        position: absolute;
+        left: 72px;
+        top: 128px;
+        width: 1000px;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 42px;
+        line-height: 1.16;
+        letter-spacing: -0.022em;
+      }
+
+      #sub {
+        position: absolute;
+        left: 72px;
+        top: 248px;
+        width: 800px;
+        font-size: 20px;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
+
+      #foot {
+        position: absolute;
+        left: 72px;
+        top: 660px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      .card {
+        position: absolute;
+        border: 1px solid var(--line-strong);
+        background: rgba(16, 19, 25, 0.9);
+        border-radius: 14px;
+        padding: 14px 18px;
+        min-width: 224px;
+      }
+
+      .card .k {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      .card .v {
+        font-family: var(--font-mono);
+        font-size: 19px;
+        margin-top: 6px;
+        color: var(--text);
+      }
+
+      /* The big money figure, right-aligned in the top right so it never
+         fights the stage. Same slot in both acts, so $0 answers $747. */
+      .fig {
+        position: absolute;
+        left: 620px;
+        width: 444px;
+        top: 288px;
+        text-align: right;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 104px;
+        line-height: 1;
+        letter-spacing: -0.03em;
+      }
+
+      .figlab {
+        position: absolute;
+        left: 620px;
+        width: 444px;
+        top: 254px;
+        text-align: right;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      /* The price tag that flips when the front-runner moves the market. */
+      #tag {
+        position: absolute;
+        left: 428px;
+        top: 508px;
+        border: 1px solid var(--line-strong);
+        background: rgba(16, 19, 25, 0.9);
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-family: var(--font-mono);
+        font-size: 18px;
+      }
+
+      #tag .was {
+        color: var(--text-faint);
+        text-decoration: line-through;
+      }
+
+      #tag .now {
+        color: var(--accent);
+        margin-left: 12px;
+      }
+
+      /* The quiet beat between the two halves. Owns the whole frame while
+         everything else is dark. */
+      #beat {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 52px;
+        letter-spacing: -0.022em;
+        line-height: 1.3;
+      }
+
+      #beat .dim {
+        color: var(--text-muted);
+      }
+
+      #end {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #end .mark {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+
+      #end h1 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 68px;
+        letter-spacing: -0.03em;
+      }
+
+      #end .line {
+        font-size: 23px;
+        line-height: 1.45;
+        color: var(--text-muted);
+      }
+
+      #end .url {
+        margin-top: 30px;
+        font-family: var(--font-mono);
+        font-size: 19px;
+        color: var(--public);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="wash"></div>
+      <div id="grid"></div>
+      <svg id="svg" width="1280" height="720" viewBox="0 0 1280 720"></svg>
+      <div class="lay" id="html"></div>
+    </div>
+
+    <script type="module">
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const svg = document.getElementById("svg");
+      const layer = document.getElementById("html");
+      const stage = document.getElementById("stage");
+
+      /* ------------------------------------------------------------------
+         Helpers, identical to sandwich.html
+         ------------------------------------------------------------------ */
+
+      const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+      const lerp = (a, b, u) => a + (b - a) * u;
+      const ease = (u) => 1 - Math.pow(1 - clamp(u), 3);
+      const easeInOut = (u) =>
+        clamp(u) < 0.5 ? 4 * clamp(u) ** 3 : 1 - Math.pow(-2 * clamp(u) + 2, 3) / 2;
+      const seg = (t, a, b) => ease((t - a) / (b - a));
+      const segL = (t, a, b) => clamp((t - a) / (b - a));
+
+      function vis(t, a, b, fi = 0.4, fo = 0.4) {
+        if (t < a || t > b) return 0;
+        return Math.min(clamp((t - a) / fi), clamp((b - t) / fo));
+      }
+
+      function mk(tag, attrs = {}, parent = svg) {
+        const n = document.createElementNS(SVG_NS, tag);
+        for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+        parent.appendChild(n);
+        return n;
+      }
+
+      function div(cls, html = "", parent = layer) {
+        const n = document.createElement("div");
+        n.className = cls;
+        n.innerHTML = html;
+        parent.appendChild(n);
+        return n;
+      }
+
+      const setOp = (n, v) => {
+        n.style.opacity = v;
+      };
+      const setAttrOp = (n, v) => n.setAttribute("opacity", v);
+
+      const markSvg = (size) => `
+        <svg width="${size}" height="${size}" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="7" fill="#171b23"/>
+          <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#333a48"/>
+          <rect x="5" y="10" width="7" height="12" rx="2" fill="#6aa9ff"/>
+          <rect x="20" y="10" width="7" height="12" rx="2" fill="#6ee7a8"/>
+          <rect x="15" y="4" width="2" height="24" rx="1" fill="#e8ecf3"/>
+        </svg>`;
+
+      /* ------------------------------------------------------------------
+         Persistent chrome
+         ------------------------------------------------------------------ */
+
+      const brand = div("", `${markSvg(28)}<span>Midpoint</span>`, stage);
+      brand.id = "brand";
+      const chain = div("", "Flare Coston2", stage);
+      chain.id = "chain";
+      const caption = div("", "", stage);
+      caption.id = "caption";
+      const sub = div("", "", stage);
+      sub.id = "sub";
+      const foot = div(
+        "",
+        "Measured on Coston2, Flare's testnet. Five consecutive runs.",
+        stage,
+      );
+      foot.id = "foot";
+      foot.style.textTransform = "none";
+      foot.style.letterSpacing = "0.02em";
+
+      /* ------------------------------------------------------------------
+         Act one: the postcard
+
+         Your order card sits left of centre. Eyes gather around it, a
+         front-runner reads it, the price tag flips, and the coins leave.
+         ------------------------------------------------------------------ */
+
+      const ORDER = { x: 468, y: 384 }; // card top-left; centre about (598, 428)
+
+      const order = div(
+        "card",
+        `<div class="k">your order</div><div class="v">buy $10,000 of FXRP</div>`,
+      );
+      Object.assign(order.style, { left: ORDER.x + "px", top: ORDER.y + "px" });
+
+      /* Eyes. Plain outlines in the faint text grey: the point is how many
+         there are, not who they belong to. Pupils look at the order. */
+      const EYES = [
+        [388, 306, 0.0],
+        [806, 312, 1.3],
+        [318, 442, 2.1],
+        [886, 452, 0.7],
+        [446, 572, 2.8],
+        [786, 578, 1.7],
+        [612, 318, 0.4],
+      ];
+
+      const eyes = EYES.map(([ex, ey]) => {
+        const g = mk("g");
+        const lid = mk("ellipse", {
+          cx: ex,
+          cy: ey,
+          rx: 17,
+          ry: 9.5,
+          fill: "none",
+          stroke: "#7b8598",
+          "stroke-width": 1.6,
+        }, g);
+        // Pupil sits shifted toward the order card, so they are looking.
+        const dx = ORDER.x + 130 - ex;
+        const dy = ORDER.y + 44 - ey;
+        const m = Math.hypot(dx, dy) || 1;
+        const pupil = mk("circle", {
+          cx: ex + (dx / m) * 4,
+          cy: ey + (dy / m) * 4,
+          r: 3.4,
+          fill: "#7b8598",
+        }, g);
+        return { g, lid, pupil };
+      });
+
+      /** A blink: the lid squashes shut for about a fifth of a second on a
+          fixed per-eye cycle. Pure function of t, so it renders the same on
+          every pass. */
+      function openness(t, phase) {
+        const p = (t + phase) % 3.4;
+        const d = Math.abs(p - 1.7);
+        return d < 0.11 ? d / 0.11 : 1;
+      }
+
+      const runner = div(
+        "card",
+        `<div class="k">front-runner</div><div class="v" style="color:#e0466b">saw it first</div>`,
+      );
+      Object.assign(runner.style, { left: "830px", top: "402px" });
+
+      const sight = mk("path", {
+        fill: "none",
+        stroke: "#e0466b",
+        "stroke-width": 1.5,
+        "stroke-dasharray": "3 5",
+      });
+
+      /* The price tag flip. $1.0485 and $1.1331 are the measured fills,
+         shortened to four places because at this size they are a price on a
+         shelf, not a data point; the exact figures live in sandwich.mp4 and
+         PROGRESS.md. */
+      const tag = div("", "", stage);
+      tag.id = "tag";
+      tag.innerHTML = `<span style="color:var(--text-faint);font-size:13px;letter-spacing:0.08em;">PRICE</span>
+        <span class="was" style="margin-left:10px">$1.0485</span><span class="now">$1.1331</span>`;
+
+      /* Coins. What leaves your pocket during the markup. */
+      const COINS = 6;
+      const coins = Array.from({ length: COINS }, () =>
+        mk("circle", { r: 7, fill: "#f5b544", stroke: "#9a6d1f", "stroke-width": 1.5 }),
+      );
+
+      const costFig = div("fig", "$0");
+      costFig.style.color = "#e0466b";
+      const costLab = div("figlab", "went to the front-runner");
+
+      /* The beat. */
+      const beat = div("", "", stage);
+      beat.id = "beat";
+      beat.innerHTML = `<div class="dim">Not a fee. Not bad luck.</div>
+        <div>The cost of being <span style="color:var(--accent)">seen</span>.</div>`;
+
+      /* ------------------------------------------------------------------
+         Act two: the envelope
+
+         One reusable envelope drawing, built around its own origin so a
+         translate-and-scale transform can carry it anywhere.
+         ------------------------------------------------------------------ */
+
+      function envelope() {
+        const g = mk("g");
+        const body = mk("rect", {
+          x: -75,
+          y: -50,
+          width: 150,
+          height: 100,
+          rx: 10,
+          fill: "#171b23",
+          stroke: "#333a48",
+          "stroke-width": 1.6,
+        }, g);
+        // The V of the closed flap. Its apex matches the folded polygon's
+        // resting point exactly, or the two read as a crossed X.
+        const seam = mk("path", {
+          d: "M -75 -50 L 0 -6 L 75 -50",
+          fill: "none",
+          stroke: "#333a48",
+          "stroke-width": 1.6,
+          "stroke-linejoin": "round",
+        }, g);
+        // The moving flap: apex above the fold when open, inside when shut.
+        const flap = mk("polygon", {
+          fill: "#1e232d",
+          stroke: "#333a48",
+          "stroke-width": 1.6,
+          "stroke-linejoin": "round",
+        }, g);
+        // The lock that lands once it is sealed.
+        const lock = mk("g", {}, g);
+        mk("rect", {
+          x: -11,
+          y: 2,
+          width: 22,
+          height: 17,
+          rx: 4,
+          fill: "#6aa9ff",
+        }, lock);
+        mk("path", {
+          d: "M -6 2 v -5 a 6 6 0 0 1 12 0 v 5",
+          fill: "none",
+          stroke: "#6aa9ff",
+          "stroke-width": 3.4,
+        }, lock);
+        return { g, body, seam, flap, lock };
+      }
+
+      /** Positions an envelope; `fold` 0 is open, 1 is sealed. */
+      function setEnvelope(env, x, y, s, fold, opacity) {
+        env.g.setAttribute("transform", `translate(${x} ${y}) scale(${s})`);
+        setAttrOp(env.g, opacity);
+        const apexY = -94 + 88 * fold;
+        env.flap.setAttribute("points", `-75,-50 75,-50 0,${apexY}`);
+        // Seam and lock belong to the sealed state only.
+        setAttrOp(env.seam, fold > 0.96 ? 1 : 0);
+        setAttrOp(env.lock, 0); // callers reveal the lock themselves
+        const sealed = fold > 0.5;
+        env.body.setAttribute("stroke", sealed ? "#4a648f" : "#333a48");
+        env.flap.setAttribute("stroke", sealed ? "#4a648f" : "#333a48");
+      }
+
+      const mainEnv = envelope();
+      const miniA = envelope();
+      const miniB = envelope();
+
+      /* The vault. */
+      const vaultGlow = mk("rect", {
+        x: 456,
+        y: 342,
+        width: 368,
+        height: 196,
+        rx: 28,
+        fill: "none",
+        stroke: "#6ee7a8",
+        "stroke-width": 1,
+      });
+      const vault = mk("rect", {
+        x: 470,
+        y: 356,
+        width: 340,
+        height: 168,
+        rx: 20,
+        fill: "rgba(23,27,35,0.9)",
+        stroke: "#6ee7a8",
+        "stroke-width": 1.5,
+      });
+      const vaultLabel = div(
+        "",
+        `<div style="font-family:var(--font-display);font-weight:600;font-size:26px;color:#e8ecf3">the vault</div>
+         <div style="font-size:16px;color:var(--text-muted);margin-top:10px;line-height:1.45">it opens every envelope at once,<br/>and shows the contents to no one</div>`,
+      );
+      Object.assign(vaultLabel.style, {
+        position: "absolute",
+        left: "470px",
+        top: "398px",
+        width: "340px",
+        textAlign: "center",
+      });
+
+      /* One price for everyone. */
+      const priceLine = mk("line", {
+        x1: 560,
+        x2: 560,
+        stroke: "#6ee7a8",
+        "stroke-width": 2,
+        "stroke-linecap": "round",
+      });
+      const fills = [0, 1, 2].map(() => mk("circle", { r: 7, fill: "#6ee7a8" }));
+      const priceLabel = div(
+        "",
+        `<div style="font-family:var(--font-display);font-weight:600;font-size:24px;color:#6ee7a8">one price for everyone</div>
+         <div style="font-size:16px;color:var(--text-muted);margin-top:8px">whoever you are, however fast you are</div>`,
+      );
+      Object.assign(priceLabel.style, {
+        position: "absolute",
+        left: "360px",
+        top: "560px",
+        width: "400px",
+        textAlign: "center",
+      });
+
+      const zeroFig = div("fig", "$0");
+      zeroFig.style.color = "#6ee7a8";
+      const zeroLab = div("figlab", "taken by front-runners");
+
+      const end = div("", "", stage);
+      end.id = "end";
+      end.innerHTML = `
+        <div class="mark">${markSvg(64)}<h1>Midpoint</h1></div>
+        <div class="line">Trade without being seen.</div>
+        <div class="line">Sealed-bid trading for FXRP, on Flare.</div>
+        <div class="url">major101x.github.io/midpoint</div>`;
+
+      /* ------------------------------------------------------------------
+         Timeline
+         ------------------------------------------------------------------ */
+
+      const S = {
+        s1: 0.0, // you place an order
+        s2: 4.2, // everyone can see it
+        s3: 8.6, // the front-runner
+        s4: 13.2, // $747
+        s5: 18.0, // the beat
+        s6: 21.6, // the envelope
+        s7: 26.4, // the vault
+        s8: 31.0, // one price
+        s9: 35.8, // end card
+        end: 41.2,
+      };
+      const DURATION = S.end;
+
+      const CAPTIONS = [
+        [S.s1, S.s2, "You place an order. $10,000 of FXRP.",
+          "The same trade anyone might make, on any ordinary day."],
+        [S.s2, S.s3, "On a public exchange, it is announced before it happens.",
+          "Your order waits in the open, readable by anyone fast enough."],
+        [S.s3, S.s4, "Someone buys ahead of you, then sells back at a markup.",
+          "By the time your turn comes, the price has already moved."],
+        [S.s4, S.s5, "You still get your trade. Just $747 lighter.",
+          "Out of every $10,000, measured. Not a worst case, the ordinary case."],
+        // S.s5 is the beat and carries its own text.
+        [S.s6, S.s7, "Midpoint seals your order before it leaves your device.",
+          "What travels the network is a locked envelope, not your trade."],
+        [S.s7, S.s8, "Envelopes are only opened inside a vault.",
+          "A sealed computer nobody can look into. Not the operator. Not us."],
+        [S.s8, S.s9, "Everyone in the batch pays the same price.",
+          "Watching you earns nothing, so nobody profits by watching."],
+      ];
+
+      let capNow = null;
+      function setCaption(t) {
+        let hit = null;
+        for (const c of CAPTIONS) if (t >= c[0] && t < c[1]) hit = c;
+        if (!hit) {
+          setOp(caption, 0);
+          setOp(sub, 0);
+          capNow = null;
+          return;
+        }
+        const [a, b, head, tail] = hit;
+        if (capNow !== head) {
+          caption.textContent = head;
+          sub.textContent = tail;
+          capNow = head;
+        }
+        const o = vis(t, a, b, 0.45, 0.35);
+        setOp(caption, o);
+        setOp(sub, o);
+        const rise = (1 - seg(t, a, a + 0.6)) * 14;
+        caption.style.transform = `translateY(${rise}px)`;
+        sub.style.transform = `translateY(${rise * 0.7}px)`;
+      }
+
+      /* ------------------------------------------------------------------
+         render
+         ------------------------------------------------------------------ */
+
+      function render(t) {
+        setCaption(t);
+
+        setOp(brand, vis(t, 0.2, S.s9 + 0.2, 0.6, 0.4) * 0.95);
+        setOp(chain, vis(t, 0.4, S.s9 + 0.2, 0.6, 0.4));
+        setOp(foot, vis(t, S.s4 + 0.4, S.s5 - 0.2, 0.5, 0.4) * 0.9);
+
+        /* --- your order -------------------------------------------------
+           On until the beat; act two brings the envelope instead. */
+        const oOn = vis(t, S.s1 + 0.6, S.s5 - 0.3, 0.6, 0.5);
+        setOp(order, oOn);
+        order.style.transform = `translateY(${(1 - seg(t, S.s1 + 0.6, S.s1 + 1.5)) * 18}px)`;
+
+        /* --- the eyes ---------------------------------------------------- */
+        eyes.forEach(({ g, lid, pupil }, i) => {
+          const on = vis(t, S.s2 + 0.3 + i * 0.16, S.s4 + 1.6, 0.45, 0.7);
+          setAttrOp(g, on);
+          const open = openness(t, EYES[i][2]);
+          lid.setAttribute("ry", 1 + 8.5 * open);
+          setAttrOp(pupil, open > 0.4 ? 1 : 0);
+        });
+
+        /* --- the front-runner --------------------------------------------- */
+        const rOn = vis(t, S.s3 + 0.2, S.s5 - 0.3, 0.5, 0.5);
+        setOp(runner, rOn);
+        const sx = 734;
+        const ex = lerp(sx, 826, seg(t, S.s3 + 0.4, S.s3 + 1.1));
+        sight.setAttribute("d", `M ${sx} 436 L ${ex} 436`);
+        setAttrOp(sight, rOn * 0.85);
+
+        /* --- the price tag flips ------------------------------------------- */
+        const tagOn = vis(t, S.s3 + 0.6, S.s5 - 0.3, 0.4, 0.5);
+        setOp(tag, tagOn);
+        const flip = seg(t, S.s3 + 1.6, S.s3 + 2.1);
+        tag.querySelector(".was").style.textDecorationColor =
+          flip > 0.4 ? "#e0466b" : "transparent";
+        const now = tag.querySelector(".now");
+        setOp(now, flip);
+        // The new price stamps in slightly oversized and settles.
+        now.style.display = "inline-block";
+        now.style.transform = `scale(${lerp(1.5, 1, flip)})`;
+
+        /* --- the coins ------------------------------------------------------
+           From your card to the front-runner's, one at a time. */
+        const A = { x: 690, y: 420 };
+        const B = { x: 930, y: 430 };
+        const C = { x: 810, y: 322 }; // control point: they arc over the gap
+        coins.forEach((c, i) => {
+          const a = S.s4 + 0.2 + i * 0.22;
+          const u = easeInOut(segL(t, a, a + 1.0));
+          const x = (1 - u) ** 2 * A.x + 2 * (1 - u) * u * C.x + u ** 2 * B.x;
+          const y = (1 - u) ** 2 * A.y + 2 * (1 - u) * u * C.y + u ** 2 * B.y;
+          c.setAttribute("cx", x);
+          c.setAttribute("cy", y);
+          const flying = t >= a && u < 1;
+          setAttrOp(c, flying ? vis(t, a, a + 1.0, 0.15, 0.12) : 0);
+        });
+
+        /* --- $747 ------------------------------------------------------------ */
+        const cOn = vis(t, S.s4 + 0.1, S.s5 - 0.2, 0.35, 0.4);
+        costFig.textContent = `$${Math.round(lerp(0, 747, seg(t, S.s4 + 0.1, S.s4 + 1.6)))}`;
+        setOp(costFig, cOn);
+        setOp(costLab, cOn);
+
+        /* --- the beat --------------------------------------------------------- */
+        const bOn = vis(t, S.s5 + 0.2, S.s6 + 0.1, 0.55, 0.45);
+        setOp(beat, bOn);
+        beat.style.transform = `translateY(${(1 - seg(t, S.s5 + 0.2, S.s5 + 1.1)) * 12}px)`;
+
+        /* --- the envelope seals ------------------------------------------------
+           The order card reappears centred, shrinks into the open envelope,
+           the flap folds, the lock lands. */
+        const envPhase = segL(t, S.s6 + 0.3, S.s7 + 1.5);
+        const cardBack = vis(t, S.s6 + 0.3, S.s6 + 1.6, 0.4, 0.3);
+        // Reuse the order card element for the return so the wording matches.
+        if (t >= S.s6) {
+          setOp(order, cardBack);
+          const shrink = seg(t, S.s6 + 0.9, S.s6 + 1.7);
+          order.style.left = lerp(ORDER.x, 640 - 112, shrink) + "px";
+          order.style.top = lerp(ORDER.y, 415, shrink) + "px";
+          order.style.transform = `scale(${lerp(1, 0.4, shrink)})`;
+          order.style.transformOrigin = "center";
+        } else {
+          order.style.left = ORDER.x + "px";
+          order.style.top = ORDER.y + "px";
+        }
+
+        const envOn = vis(t, S.s6 + 1.0, S.s7 + 1.3, 0.5, 0.4);
+        const fold = seg(t, S.s6 + 1.9, S.s6 + 2.5);
+        // It drifts toward the vault as act two hands over.
+        const drift = easeInOut(segL(t, S.s7 + 0.2, S.s7 + 1.3));
+        setEnvelope(
+          mainEnv,
+          lerp(640, 640, drift),
+          lerp(430, 440, drift),
+          lerp(1, 0.42, drift),
+          fold,
+          envOn * (1 - 0.85 * drift * drift),
+        );
+        const lockOn = vis(t, S.s6 + 2.7, S.s7 + 0.9, 0.3, 0.3);
+        setAttrOp(mainEnv.lock, lockOn * Math.min(1, envOn * 2));
+        mainEnv.lock.setAttribute(
+          "transform",
+          `scale(${lerp(1.6, 1, seg(t, S.s6 + 2.7, S.s6 + 3.1))})`,
+        );
+
+        /* Two more envelopes follow it in: yours is not the only trade. */
+        [miniA, miniB].forEach((env, i) => {
+          const a = S.s7 + 0.4 + i * 0.3;
+          const u = easeInOut(segL(t, a, a + 1.3));
+          setEnvelope(
+            env,
+            lerp(150, 640, u),
+            lerp(i === 0 ? 310 : 552, 440, u),
+            0.42,
+            1,
+            vis(t, a, a + 1.35, 0.3, 0.25) * (1 - 0.85 * u * u),
+          );
+          setAttrOp(env.lock, u > 0.02 && u < 0.9 ? 1 : 0);
+        });
+        void envPhase;
+
+        /* --- the vault ---------------------------------------------------------- */
+        const vOn = vis(t, S.s7 + 0.1, S.s8 + 0.3, 0.5, 0.5);
+        setAttrOp(vault, vOn);
+        setAttrOp(vaultGlow, vOn * 0.22);
+        setOp(vaultLabel, vOn);
+
+        /* --- one price ----------------------------------------------------------- */
+        const lOn = vis(t, S.s8 + 0.2, S.s9, 0.45, 0.5);
+        const lDraw = seg(t, S.s8 + 0.2, S.s8 + 1.2);
+        priceLine.setAttribute("y1", lerp(440, 330, lDraw));
+        priceLine.setAttribute("y2", lerp(440, 540, lDraw));
+        setAttrOp(priceLine, lOn);
+        setOp(priceLabel, vis(t, S.s8 + 0.8, S.s9, 0.45, 0.5));
+
+        fills.forEach((n, i) => {
+          const a = S.s8 + 0.6 + i * 0.18;
+          const u = easeInOut(segL(t, a, a + 1.0));
+          n.setAttribute("cx", lerp(900 - i * 52, 560, u));
+          n.setAttribute("cy", 365 + i * 55);
+          setAttrOp(n, vis(t, a, S.s9, 0.35, 0.45));
+        });
+
+        const zOn = vis(t, S.s8 + 1.4, S.s9, 0.4, 0.45);
+        setOp(zeroFig, zOn);
+        setOp(zeroLab, zOn);
+
+        /* --- end card -------------------------------------------------------------- */
+        const endOn = vis(t, S.s9 + 0.3, DURATION, 0.7, 0.35);
+        setOp(end, endOn);
+        end.style.transform = `scale(${lerp(0.985, 1, seg(t, S.s9 + 0.3, S.s9 + 1.6))})`;
+      }
+
+      /* The renderer's only entry point. */
+      window.__seek = (t) => render(t);
+      window.__duration = DURATION;
+      window.__poster = 14.9;
+
+      // A still, so opening the file in a browser shows something sensible.
+      document.fonts.ready.then(() => render(14.9));
+    </script>
+  </body>
+</html>
