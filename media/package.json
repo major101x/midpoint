@@ -1,0 +1,12 @@
+{
+  "name": "midpoint-media",
+  "private": true,
+  "type": "module",
+  "description": "Renders the explainer video from sandwich.html. See render.mjs.",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.56.1"
+  }
+}

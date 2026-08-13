@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Midpoint :: the cost of being observed</title>
+    <!--
+      The story of one measured sandwich, told on a single price axis.
+
+      Deliberately not a live page: every visual state is a pure function of
+      `t` in seconds, and nothing reads the clock on its own. `render.mjs`
+      steps `window.__seek(t)` frame by frame and screenshots, so the output
+      is identical on every run and does not depend on how fast the machine
+      renders. Do not introduce `requestAnimationFrame`, transitions or CSS
+      animations here; they would reintroduce wall-clock timing and the
+      captured frames would start to smear.
+
+      The prices and the basis point figure are the ones recorded in
+      PROGRESS.md day 12, measured on Coston2 against `NaiveAmm`. Do not
+      round them for looks. The three bids in act two are illustrative and
+      deliberately carry no numbers, so nothing on screen can be mistaken
+      for a second measurement.
+    -->
+    <style>
+      @font-face {
+        font-family: "Outfit";
+        font-weight: 400;
+        src: url("./fonts/outfit-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Outfit";
+        font-weight: 600;
+        src: url("./fonts/outfit-latin-600-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 400;
+        src: url("./fonts/inter-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 500;
+        src: url("./fonts/inter-latin-500-normal.woff2") format("woff2");
+      }
+
+      /* Mirrors web/src/styles/tokens.css. Kept as a copy rather than an
+         import because this file is opened over file:// by the renderer. */
+      :root {
+        color-scheme: dark;
+        --bg: #08090d;
+        --surface: #101319;
+        --surface-2: #171b23;
+        --line: #252b36;
+        --line-strong: #333a48;
+        --rule: #333c4d;
+        --grid-line: rgba(150, 170, 210, 0.045);
+        --text: #e8ecf3;
+        --text-muted: #98a1b2;
+        --text-faint: #7b8598;
+        --public: #6aa9ff;
+        --private: #6ee7a8;
+        --accent: #e0466b;
+        --font-display: "Outfit", sans-serif;
+        --font-body: "Inter", sans-serif;
+        --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      #stage {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+        background: var(--bg);
+        font-family: var(--font-body);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* The faint square lattice the interface uses, at the same 64px cell. */
+      #grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          repeating-linear-gradient(
+            to right,
+            var(--grid-line) 0 1px,
+            transparent 1px 64px
+          ),
+          repeating-linear-gradient(
+            to bottom,
+            var(--grid-line) 0 1px,
+            transparent 1px 64px
+          );
+      }
+
+      /* A single cool wash behind the whole frame so the near-black does not
+         read as a flat fill once the video has been compressed. */
+      #wash {
+        position: absolute;
+        inset: -20%;
+        background: radial-gradient(
+          46% 40% at 52% 46%,
+          rgba(29, 78, 216, 0.22),
+          rgba(8, 9, 13, 0) 70%
+        );
+      }
+
+      #svg {
+        position: absolute;
+        inset: 0;
+      }
+
+      .lay {
+        position: absolute;
+        inset: 0;
+      }
+
+      #brand {
+        position: absolute;
+        left: 72px;
+        top: 48px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      #brand span {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+      }
+
+      #chain {
+        position: absolute;
+        right: 72px;
+        top: 54px;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      #caption {
+        position: absolute;
+        left: 72px;
+        top: 128px;
+        width: 980px;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 42px;
+        line-height: 1.16;
+        letter-spacing: -0.022em;
+      }
+
+      #sub {
+        position: absolute;
+        left: 72px;
+        top: 226px;
+        width: 760px;
+        font-size: 20px;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
+
+      #foot {
+        position: absolute;
+        left: 72px;
+        top: 660px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      .card {
+        position: absolute;
+        border: 1px solid var(--line-strong);
+        background: rgba(16, 19, 25, 0.86);
+        border-radius: 14px;
+        padding: 14px 18px;
+        min-width: 216px;
+      }
+
+      .card .k {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      .card .v {
+        font-family: var(--font-mono);
+        font-size: 20px;
+        margin-top: 6px;
+        color: var(--text);
+      }
+
+      /* The two states of a bid stack on top of each other so the seal is a
+         cross-fade in place rather than a jump in the card's height. Wide
+         enough for the longer of the two, since a clipped string mid-fade
+         reads as a rendering fault rather than as encryption. */
+      .bid {
+        min-width: 268px;
+      }
+
+      .bid .v {
+        position: relative;
+        height: 24px;
+        font-size: 16px;
+      }
+
+      .bid .v > span {
+        position: absolute;
+        left: 0;
+        top: 0;
+        white-space: nowrap;
+      }
+
+      .tag {
+        position: absolute;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      /* The one big number, in the same place in both acts, so the second
+         one lands as a reply to the first. */
+      .fig {
+        position: absolute;
+        left: 620px;
+        width: 444px;
+        top: 288px;
+        text-align: right;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 92px;
+        line-height: 1;
+        letter-spacing: -0.03em;
+      }
+
+      .figlab {
+        position: absolute;
+        left: 620px;
+        width: 444px;
+        top: 254px;
+        text-align: right;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+
+      #end {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #end .mark {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+
+      #end h1 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 68px;
+        letter-spacing: -0.03em;
+      }
+
+      #end .line {
+        font-size: 23px;
+        line-height: 1.45;
+        color: var(--text-muted);
+      }
+
+      #end .url {
+        margin-top: 30px;
+        font-family: var(--font-mono);
+        font-size: 19px;
+        color: var(--public);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="wash"></div>
+      <div id="grid"></div>
+      <svg id="svg" width="1280" height="720" viewBox="0 0 1280 720"></svg>
+      <div class="lay" id="html"></div>
+    </div>
+
+    <script type="module">
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const svg = document.getElementById("svg");
+      const layer = document.getElementById("html");
+      const stage = document.getElementById("stage");
+
+      /* ------------------------------------------------------------------
+         Helpers
+         ------------------------------------------------------------------ */
+
+      const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+      const lerp = (a, b, u) => a + (b - a) * u;
+      /** Standard ease, matching --ease-out in the interface. */
+      const ease = (u) => 1 - Math.pow(1 - clamp(u), 3);
+      const easeInOut = (u) =>
+        clamp(u) < 0.5 ? 4 * clamp(u) ** 3 : 1 - Math.pow(-2 * clamp(u) + 2, 3) / 2;
+
+      /** Progress through [a, b], eased and linear. */
+      const seg = (t, a, b) => ease((t - a) / (b - a));
+      const segL = (t, a, b) => clamp((t - a) / (b - a));
+
+      /**
+       * Opacity envelope: up over `fi` from `a`, down over `fo` before `b`.
+       * Everything on screen uses this, so nothing ever pops.
+       */
+      function vis(t, a, b, fi = 0.4, fo = 0.4) {
+        if (t < a || t > b) return 0;
+        return Math.min(clamp((t - a) / fi), clamp((b - t) / fo));
+      }
+
+      function mk(tag, attrs = {}, parent = svg) {
+        const n = document.createElementNS(SVG_NS, tag);
+        for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+        parent.appendChild(n);
+        return n;
+      }
+
+      function div(cls, html = "", parent = layer) {
+        const n = document.createElement("div");
+        n.className = cls;
+        n.innerHTML = html;
+        parent.appendChild(n);
+        return n;
+      }
+
+      const setOp = (n, v) => {
+        n.style.opacity = v;
+      };
+      const setAttrOp = (n, v) => n.setAttribute("opacity", v);
+
+      const markSvg = (size) => `
+        <svg width="${size}" height="${size}" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="7" fill="#171b23"/>
+          <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#333a48"/>
+          <rect x="5" y="10" width="7" height="12" rx="2" fill="#6aa9ff"/>
+          <rect x="20" y="10" width="7" height="12" rx="2" fill="#6ee7a8"/>
+          <rect x="15" y="4" width="2" height="24" rx="1" fill="#e8ecf3"/>
+        </svg>`;
+
+      /* ------------------------------------------------------------------
+         The axis.
+
+         One number line carries the whole first act: every price in the
+         story is a position on it, so the gap the searcher opens is a
+         distance the viewer can see rather than a figure to be trusted.
+         Left is cheap, right is dear, and your fill slides right.
+         ------------------------------------------------------------------ */
+
+      const AX = { y: 430, x0: 216, x1: 1064, lo: 1.03, hi: 1.15 };
+      const px = (p) => AX.x0 + ((p - AX.lo) / (AX.hi - AX.lo)) * (AX.x1 - AX.x0);
+
+      /** Measured on Coston2, PROGRESS.md day 12. */
+      const P_FAIR = 1.048538; // the fill when nobody front-runs
+      const P_BAD = 1.133141; // the fill after the front-run
+      const BPS = 747;
+
+      /* ------------------------------------------------------------------
+         Persistent chrome
+         ------------------------------------------------------------------ */
+
+      const brand = div("", `${markSvg(28)}<span>Midpoint</span>`, stage);
+      brand.id = "brand";
+      const chain = div("", "Flare Coston2", stage);
+      chain.id = "chain";
+      const caption = div("", "", stage);
+      caption.id = "caption";
+      const sub = div("", "", stage);
+      sub.id = "sub";
+      const foot = div("", "USDT0 per FXRP", stage);
+      foot.id = "foot";
+
+      /* ------------------------------------------------------------------
+         Act one: the public pool
+         ------------------------------------------------------------------ */
+
+      const axisLine = mk("line", {
+        x1: AX.x0,
+        y1: AX.y,
+        x2: AX.x1 - 34,
+        y2: AX.y,
+        stroke: "#333c4d",
+        "stroke-width": 1.5,
+        "stroke-dasharray": "2 6",
+        "stroke-linecap": "round",
+      });
+
+      const arrow = mk("path", {
+        d: `M ${AX.x1 - 30} ${AX.y - 10} L ${AX.x1} ${AX.y} L ${AX.x1 - 30} ${AX.y + 10}`,
+        fill: "none",
+        stroke: "#333c4d",
+        "stroke-width": 2,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      });
+
+      /** A tick straddling the axis at a price. */
+      function tick(p, colour) {
+        return mk("line", {
+          x1: px(p),
+          y1: AX.y - 16,
+          x2: px(p),
+          y2: AX.y + 16,
+          stroke: colour,
+          "stroke-width": 2.5,
+          "stroke-linecap": "round",
+        });
+      }
+
+      /** The price and its one line of explanation, hung under the axis. */
+      function priceLabel(p, colour, text) {
+        const n = div(
+          "",
+          `<div style="font-family:var(--font-mono);font-size:21px;color:${colour}">${p.toFixed(6)}</div>
+           <div style="font-size:14px;color:var(--text-faint);margin-top:5px">${text}</div>`,
+        );
+        Object.assign(n.style, {
+          position: "absolute",
+          left: px(p) - 120 + "px",
+          top: AX.y + 26 + "px",
+          width: "240px",
+          textAlign: "center",
+        });
+        return n;
+      }
+
+      const fairTick = tick(P_FAIR, "#6ee7a8");
+      const fairLabel = priceLabel(P_FAIR, "#6ee7a8", "the fill when nobody is watching");
+      const badTick = tick(P_BAD, "#e0466b");
+      const badLabel = priceLabel(P_BAD, "#e0466b", "the fill you actually got");
+
+      const order = div(
+        "card",
+        `<div class="k">your order</div><div class="v">buy FXRP</div>`,
+      );
+      order.style.top = "286px";
+
+      const watcher = div(
+        "card",
+        `<div class="k">searcher</div><div class="v" style="color:#e0466b">reads it first</div>`,
+      );
+      Object.assign(watcher.style, { left: "760px", top: "286px" });
+
+      const sightLine = mk("path", {
+        fill: "none",
+        stroke: "#e0466b",
+        "stroke-width": 1.5,
+        "stroke-dasharray": "3 5",
+      });
+
+      /* The front-run, as an arc that drags the price to the right. */
+      const push = mk("path", {
+        fill: "none",
+        stroke: "#e0466b",
+        "stroke-width": 2.5,
+        "stroke-linecap": "round",
+      });
+      const pushHead = mk("circle", { r: 6, fill: "#e0466b" });
+
+      /* The gap, bracketed under the prices. */
+      const bracket = mk("path", { fill: "none", stroke: "#e0466b", "stroke-width": 1.5 });
+      const bracketLabel = div("tag", "the cost of being observed");
+      Object.assign(bracketLabel.style, {
+        color: "#e0466b",
+        top: AX.y + 122 + "px",
+        textAlign: "center",
+        width: "440px",
+      });
+
+      const costFig = div("fig", "0 bps");
+      costFig.style.color = "#e0466b";
+      const costLab = div("figlab", "taken from your fill");
+
+      /* ------------------------------------------------------------------
+         Act two: the venue
+         ------------------------------------------------------------------ */
+
+      const CIPHER = ["0x8f3a…c2d1", "0x41b7…9e05", "0xd0c6…7a12"];
+      const SIDES = ["buy · size · limit", "sell · size · limit", "buy · size · limit"];
+
+      const bids = [0, 1, 2].map((i) => {
+        const n = div(
+          "card bid",
+          `<div class="k">bid ${i + 1}</div>
+           <div class="v">
+             <span class="clear">${SIDES[i]}</span>
+             <span class="seal" style="color:#6aa9ff">${CIPHER[i]}</span>
+           </div>`,
+        );
+        return n;
+      });
+
+      const enclaveGlow = mk("rect", {
+        x: 456,
+        y: 342,
+        width: 368,
+        height: 196,
+        rx: 28,
+        fill: "none",
+        stroke: "#6ee7a8",
+        "stroke-width": 1,
+      });
+      const enclave = mk("rect", {
+        x: 470,
+        y: 356,
+        width: 340,
+        height: 168,
+        rx: 20,
+        fill: "rgba(23,27,35,0.82)",
+        stroke: "#6ee7a8",
+        "stroke-width": 1.5,
+      });
+      const enclaveLabel = div(
+        "",
+        `<div style="font-family:var(--font-display);font-weight:600;font-size:26px;color:#e8ecf3">Confidential Extension</div>
+         <div style="font-size:16px;color:var(--text-muted);margin-top:10px;line-height:1.45">opens the bids, matches the batch,<br/>signs the result</div>`,
+      );
+      Object.assign(enclaveLabel.style, {
+        position: "absolute",
+        left: "470px",
+        top: "392px",
+        width: "340px",
+        textAlign: "center",
+      });
+
+      const clearLine = mk("line", {
+        x1: px(P_FAIR),
+        x2: px(P_FAIR),
+        stroke: "#6ee7a8",
+        "stroke-width": 2,
+        "stroke-linecap": "round",
+      });
+      const clearLabel = div(
+        "",
+        `<div style="font-family:var(--font-display);font-weight:600;font-size:24px;color:#6ee7a8">one clearing price</div>
+         <div style="font-size:16px;color:var(--text-muted);margin-top:8px;line-height:1.45">the same for every order in the batch,<br/>checked against the FTSO feed</div>`,
+      );
+      Object.assign(clearLabel.style, {
+        position: "absolute",
+        left: px(P_FAIR) - 210 + "px",
+        top: AX.y + 76 + "px",
+        width: "420px",
+        textAlign: "center",
+      });
+
+      const fills = [0, 1, 2].map(() => mk("circle", { r: 7, fill: "#6ee7a8" }));
+
+      const zeroFig = div("fig", "0 bps");
+      zeroFig.style.color = "#6ee7a8";
+      const zeroLab = div("figlab", "taken from the batch");
+
+      const end = div("", "", stage);
+      end.id = "end";
+      end.innerHTML = `
+        <div class="mark">${markSvg(64)}<h1>Midpoint</h1></div>
+        <div class="line">Sealed bid batch auctions for FXRP,</div>
+        <div class="line">matched inside a Flare Confidential Extension.</div>
+        <div class="url">major101x.github.io/midpoint</div>`;
+
+      /* ------------------------------------------------------------------
+         Timeline
+         ------------------------------------------------------------------ */
+
+      const S = {
+        s1: 0.0, // the order
+        s2: 3.4, // it is readable
+        s3: 7.2, // the front-run
+        s4: 11.4, // your fill
+        s5: 15.2, // the figure
+        s6: 19.4, // sealing
+        s7: 23.4, // the enclave
+        s8: 27.4, // one clearing price
+        s9: 31.6, // end card
+        end: 35.8,
+      };
+      const DURATION = S.end;
+
+      const CAPTIONS = [
+        [S.s1, S.s2, "You send a buy order to a public pool.",
+          "A constant product pool. Nothing about it is broken."],
+        [S.s2, S.s3, "It is readable before it fills.",
+          "Pending transactions sit in the clear, and that is the whole opening."],
+        [S.s3, S.s4, "A searcher buys ahead of you.",
+          "The pool re-prices against whatever arrived first."],
+        [S.s4, S.s5, "Your order takes what is left.",
+          "Same trade, same block, a worse number."],
+        [S.s5, S.s6, "The searcher keeps the difference.",
+          "Measured on Coston2, stable across five consecutive runs."],
+        [S.s6, S.s7, "Midpoint takes the order off the wire.",
+          "Bids are sealed in the browser. The chain only ever stores ciphertext."],
+        [S.s7, S.s8, "They are opened inside a TEE.",
+          "Hardware the operator cannot read into, attested on chain."],
+        [S.s8, S.s9, "The whole batch clears at one price.",
+          "Being early buys you nothing, so there is nothing to run ahead of."],
+      ];
+
+      /** Swaps text only when the scene changes, to avoid a per-frame reflow. */
+      let capNow = null;
+      function setCaption(t) {
+        let hit = null;
+        for (const c of CAPTIONS) if (t >= c[0] && t < c[1]) hit = c;
+        if (!hit) {
+          setOp(caption, 0);
+          setOp(sub, 0);
+          capNow = null;
+          return;
+        }
+        const [a, b, head, tail] = hit;
+        if (capNow !== head) {
+          caption.textContent = head;
+          sub.textContent = tail;
+          capNow = head;
+        }
+        const o = vis(t, a, b, 0.45, 0.35);
+        setOp(caption, o);
+        setOp(sub, o);
+        const rise = (1 - seg(t, a, a + 0.6)) * 14;
+        caption.style.transform = `translateY(${rise}px)`;
+        sub.style.transform = `translateY(${rise * 0.7}px)`;
+      }
+
+      /* ------------------------------------------------------------------
+         render
+         ------------------------------------------------------------------ */
+
+      function render(t) {
+        setCaption(t);
+
+        setOp(brand, vis(t, 0.2, S.s9 + 0.2, 0.6, 0.4) * 0.95);
+        setOp(chain, vis(t, 0.4, S.s9 + 0.2, 0.6, 0.4));
+
+        /* --- the axis --------------------------------------------------
+           It steps aside while the bids are sealed and the enclave takes
+           the frame, then comes back for the answer. Leaving it up would
+           have the sealed bids drifting across a price line they have
+           nothing to do with yet. */
+        const axisOn = Math.max(
+          vis(t, S.s1 + 0.3, S.s6 + 1.0, 0.7, 0.6),
+          vis(t, S.s8 - 0.7, S.s9, 0.7, 0.5),
+        );
+        // Draws itself in rather than fading, so it reads as a measurement.
+        const drawn = seg(t, S.s1 + 0.3, S.s1 + 1.6);
+        axisLine.setAttribute("x2", lerp(AX.x0, AX.x1 - 34, drawn));
+        setAttrOp(axisLine, axisOn);
+        setAttrOp(arrow, axisOn * seg(t, S.s1 + 1.2, S.s1 + 1.8));
+        setOp(foot, axisOn * 0.85);
+
+        /* --- your order ------------------------------------------------- */
+        const oOn = vis(t, S.s1 + 0.7, S.s3 + 0.6, 0.5, 0.5);
+        setOp(order, oOn);
+        order.style.left = lerp(112, 206, seg(t, S.s1 + 0.7, S.s2 + 1.2)) + "px";
+
+        /* --- the fair price ---------------------------------------------- */
+        const fairOn = vis(t, S.s1 + 1.5, S.s6 + 0.2, 0.5, 0.5);
+        setAttrOp(fairTick, fairOn);
+        setOp(fairLabel, fairOn);
+
+        /* --- the searcher ------------------------------------------------ */
+        const wOn = vis(t, S.s2 + 0.5, S.s5 - 0.2, 0.5, 0.6);
+        setOp(watcher, wOn);
+        const sx = 434;
+        const ex = lerp(sx, 752, seg(t, S.s2 + 0.7, S.s2 + 1.6));
+        sightLine.setAttribute("d", `M ${sx} 319 L ${ex} 319`);
+        setAttrOp(sightLine, wOn * 0.85);
+
+        /* --- the front-run drags the price ------------------------------- */
+        const pOn = vis(t, S.s3 + 0.2, S.s5 - 0.2, 0.4, 0.6);
+        const travel = easeInOut(segL(t, S.s3 + 0.4, S.s3 + 2.4));
+        const hx = lerp(px(P_FAIR), px(P_BAD), travel);
+        const arcY = AX.y - 62;
+        push.setAttribute(
+          "d",
+          `M ${px(P_FAIR)} ${AX.y} C ${px(P_FAIR) + 60} ${arcY}, ${hx - 60} ${arcY}, ${hx} ${AX.y}`,
+        );
+        const started = travel > 0.02 ? 1 : 0;
+        setAttrOp(push, pOn * started);
+        pushHead.setAttribute("cx", hx);
+        pushHead.setAttribute("cy", AX.y);
+        setAttrOp(pushHead, pOn * started);
+
+        /* --- your fill ---------------------------------------------------- */
+        const bOn = vis(t, S.s4 + 0.2, S.s6 + 0.2, 0.4, 0.5);
+        setAttrOp(badTick, bOn);
+        setOp(badLabel, bOn);
+
+        /* --- the gap ------------------------------------------------------ */
+        const gOn = vis(t, S.s4 + 1.0, S.s6, 0.45, 0.5);
+        const gy = AX.y + 96;
+        const gx1 = px(P_FAIR);
+        const gx2 = lerp(gx1, px(P_BAD), seg(t, S.s4 + 1.0, S.s4 + 2.1));
+        bracket.setAttribute(
+          "d",
+          `M ${gx1} ${gy - 11} L ${gx1} ${gy} L ${gx2} ${gy} L ${gx2} ${gy - 11}`,
+        );
+        setAttrOp(bracket, gOn);
+        bracketLabel.style.left = (gx1 + gx2) / 2 - 220 + "px";
+        setOp(bracketLabel, gOn);
+
+        /* --- the figure ---------------------------------------------------- */
+        const cOn = vis(t, S.s5 + 0.1, S.s6, 0.35, 0.45);
+        costFig.textContent = `${Math.round(lerp(0, BPS, seg(t, S.s5 + 0.1, S.s5 + 1.5)))} bps`;
+        setOp(costFig, cOn);
+        setOp(costLab, cOn);
+
+        /* --- the bids seal --------------------------------------------------
+           They arrive readable, turn to ciphertext in place, then travel into
+           the enclave as it appears. */
+        bids.forEach((n, i) => {
+          const born = S.s6 + 0.3 + i * 0.22;
+          const seals = born + 0.9;
+          const flies = S.s7 - 0.1 + i * 0.14;
+          const u = easeInOut(segL(t, flies, flies + 1.4));
+          n.style.left = lerp(112, 540, u) + "px";
+          n.style.top = lerp(286 + i * 92, 396, u) + "px";
+          const alive = vis(t, born, flies + 1.4, 0.45, 0.5);
+          setOp(n, alive * (1 - 0.55 * u * u));
+          const sealed = seg(t, seals, seals + 0.5);
+          n.querySelector(".clear").style.opacity = 1 - sealed;
+          n.querySelector(".seal").style.opacity = sealed;
+          n.style.borderColor = sealed > 0.5 ? "rgba(106,169,255,0.5)" : "var(--line-strong)";
+        });
+
+        const eOn = vis(t, S.s7 + 0.1, S.s8 + 0.3, 0.5, 0.5);
+        setAttrOp(enclave, eOn);
+        setAttrOp(enclaveGlow, eOn * 0.22);
+        setOp(enclaveLabel, eOn);
+
+        /* --- one price ------------------------------------------------------ */
+        const lOn = vis(t, S.s8 + 0.2, S.s9, 0.45, 0.5);
+        const lDraw = seg(t, S.s8 + 0.2, S.s8 + 1.2);
+        clearLine.setAttribute("y1", lerp(AX.y, AX.y - 110, lDraw));
+        clearLine.setAttribute("y2", lerp(AX.y, AX.y + 56, lDraw));
+        setAttrOp(clearLine, lOn);
+        setOp(clearLabel, vis(t, S.s8 + 0.8, S.s9, 0.45, 0.5));
+
+        fills.forEach((n, i) => {
+          const a = S.s8 + 0.7 + i * 0.18;
+          const u = easeInOut(segL(t, a, a + 1.0));
+          n.setAttribute("cx", lerp(px(P_BAD) - i * 52, px(P_FAIR), u));
+          n.setAttribute("cy", AX.y - 44 + i * 44);
+          setAttrOp(n, vis(t, a, S.s9, 0.35, 0.45));
+        });
+
+        const zOn = vis(t, S.s8 + 1.4, S.s9, 0.4, 0.45);
+        setOp(zeroFig, zOn);
+        setOp(zeroLab, zOn);
+
+        /* --- end card -------------------------------------------------------- */
+        const endOn = vis(t, S.s9 + 0.3, DURATION, 0.7, 0.35);
+        setOp(end, endOn);
+        end.style.transform = `scale(${lerp(0.985, 1, seg(t, S.s9 + 0.3, S.s9 + 1.6))})`;
+      }
+
+      /* The renderer's only entry point. */
+      window.__seek = (t) => render(t);
+      window.__duration = DURATION;
+
+      // A still, so opening the file in a browser shows something sensible.
+      document.fonts.ready.then(() => render(17.2));
+    </script>
+  </body>
+</html>
