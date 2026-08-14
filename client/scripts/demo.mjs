@@ -115,7 +115,14 @@ async function main() {
     }
     const inWallet = await pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [client.account.address] });
     const amount = inWallet < want - inVault ? inWallet : want - inVault;
-    if (amount === 0n) throw new Error(`${label} has nothing left to deposit`);
+    if (amount === 0n) {
+      // The faucet caps what these wallets can hold, so an empty wallet with
+      // a live vault balance is the normal repeat-run state, not a failure.
+      // The order is sized to the vault below.
+      if (inVault === 0n) throw new Error(`${label} has nothing to deposit`);
+      log(`   ${label} wallet is empty; trading from the ${fmt(inVault)} in the vault`);
+      return;
+    }
     await send(client, { address: token, abi: erc20, functionName: "approve", args: [VAULT, amount] });
     await send(client, { address: VAULT, abi: vaultAbi, functionName: "deposit", args: [isBase, amount] });
     log(`   ${label} deposited ${fmt(amount)}`);
@@ -149,17 +156,30 @@ async function main() {
   const sellLimit = (oracle * 99n) / 100n;
   const buyLimit = (oracle * 101n) / 100n;
 
+  // Sized to what both sides can actually cover: the sell posts base, the buy
+  // posts quote at its limit, and the demo trades the largest size both
+  // collaterals allow, capped at 1.5 FXRP. This is what makes re-runs work
+  // after earlier batches have moved the balances around.
+  const SCALE = 1_000_000n;
+  const min = (...xs) => xs.reduce((a, b) => (a < b ? a : b));
+  const size = min(
+    1_500_000n,
+    before.makerBase,
+    (before.takerQuote * SCALE) / buyLimit,
+  );
+  if (size === 0n) throw new Error("no collateral on one side; deposit first");
+
   log("\n2. sealed orders (the chain sees only ciphertext)");
   const sellCt = sealOrder(teePub, {
     trader: maker.account.address, batchId, side: "SELL",
-    limitPrice: sellLimit, size: 1_500_000n,
+    limitPrice: sellLimit, size,
   });
   const buyCt = sealOrder(teePub, {
     trader: taker.account.address, batchId, side: "BUY",
-    limitPrice: buyLimit, size: 1_500_000n,
+    limitPrice: buyLimit, size,
   });
-  log(`   maker SELL 1.5 FXRP @ ${fmt(sellLimit)}  ->  ${sellCt.slice(0, 34)}...`);
-  log(`   taker BUY  1.5 FXRP @ ${fmt(buyLimit)}  ->  ${buyCt.slice(0, 34)}...`);
+  log(`   maker SELL ${fmt(size)} FXRP @ ${fmt(sellLimit)}  ->  ${sellCt.slice(0, 34)}...`);
+  log(`   taker BUY  ${fmt(size)} FXRP @ ${fmt(buyLimit)}  ->  ${buyCt.slice(0, 34)}...`);
 
   await send(maker, { address: BOOK, abi: bookAbi, functionName: "submitOrder", args: [sellCt], value: INSTRUCTION_FEE });
   await send(taker, { address: BOOK, abi: bookAbi, functionName: "submitOrder", args: [buyCt], value: INSTRUCTION_FEE });

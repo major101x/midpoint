@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Midpoint :: interstitial</title>
+    <!-- A single still: the bridge between the explainer and the live
+         capture in the submission cut. Screenshot once, loop three seconds. -->
+    <style>
+      @font-face {
+        font-family: "Outfit";
+        font-weight: 600;
+        src: url("./fonts/outfit-latin-600-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-weight: 400;
+        src: url("./fonts/inter-latin-400-normal.woff2") format("woff2");
+      }
+      * { margin: 0; box-sizing: border-box; }
+      html, body { width: 1280px; height: 720px; overflow: hidden; }
+      #stage {
+        width: 1280px;
+        height: 720px;
+        background: #08090d;
+        color: #e8ecf3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background-image:
+          radial-gradient(46% 40% at 52% 46%, rgba(29, 78, 216, 0.22), rgba(8, 9, 13, 0) 70%),
+          repeating-linear-gradient(to right, rgba(150,170,210,0.045) 0 1px, transparent 1px 64px),
+          repeating-linear-gradient(to bottom, rgba(150,170,210,0.045) 0 1px, transparent 1px 64px);
+      }
+      h1 {
+        font-family: "Outfit", sans-serif;
+        font-weight: 600;
+        font-size: 54px;
+        letter-spacing: -0.022em;
+      }
+      p {
+        font-family: "Inter", sans-serif;
+        font-size: 22px;
+        color: #98a1b2;
+        margin-top: 22px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <h1>And here it is for real.</h1>
+      <p>Two sealed orders, one batch, settled on Flare Coston2.<br />Recorded live, played at 4x.</p>
+    </div>
+  </body>
+</html>

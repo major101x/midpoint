@@ -1,0 +1,32 @@
+enclave       0x0000000000000000000000000000000000000000000000000000000000010198
+batch         7
+
+1. deposits
+   maker (FXRP) already holds 3.000000 in the vault
+   taker (USDT0) already holds 3.889541 in the vault
+
+2. sealed orders (the chain sees only ciphertext)
+   maker SELL 1.500000 FXRP @ 1.000482  ->  0x04bb82eb47eb60b9e222c0e7cdccd475...
+   taker BUY  1.500000 FXRP @ 1.020693  ->  0x049421efa374c4ec614ffcfa08c8f3a2...
+   on chain: orderCount=2, and nothing else
+   waiting 58s for the batch window to elapse
+   waiting 50s for the batch window to elapse
+   waiting 26s for the batch window to elapse
+   waiting 13s for the batch window to elapse
+   waiting 5s for the batch window to elapse
+
+3. close the batch
+   orders 2, instruction 0x42ea4823dc8bdd7df1342f7e8c324c95252717991f35b927a861a130b83e650d
+
+4. relayer polls the proxy for the enclave's signed result
+   clearing price 1.010587   volume 1.500000 FXRP
+   signature      0xc53a1842ce53ae7ac5e851a3259efbb0...
+
+5. settle on chain
+
+6. balances
+   maker  FXRP 3.000000 -> 1.500000   USDT0 1.513633 -> 3.029513
+   taker  FXRP 0.000000 -> 1.500000   USDT0 3.889541 -> 2.373661
+
+   conserved: base true, quote true
+   settled batch 7 at 1.010587

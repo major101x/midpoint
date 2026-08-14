@@ -36,6 +36,17 @@ if (!process.env.DEPLOYER_KEY && process.env.PRIVATE_KEY) {
   process.env.DEPLOYER_KEY = process.env.PRIVATE_KEY;
 }
 
+// SWAP_TRADERS=1 exchanges the maker and taker wallets. Each settled batch
+// moves the FXRP wholesale from the seller to the buyer, and these wallets
+// cannot refill from the faucet at will, so consecutive demo runs alternate
+// which side holds the base.
+if (process.env.SWAP_TRADERS === "1") {
+  [process.env.MAKER_KEY, process.env.TAKER_KEY] =
+    [process.env.TAKER_KEY, process.env.MAKER_KEY];
+  [process.env.MAKER_ADDRESS, process.env.TAKER_ADDRESS] =
+    [process.env.TAKER_ADDRESS, process.env.MAKER_ADDRESS];
+}
+
 const ADDRESSES = {
   FXRP: "0x0b6a3645c240605887a5532109323a3e12273dc7",
   USDT0: "0xc1a5b41512496b80903d1f32d6dea3a73212e71f",
