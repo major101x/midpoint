@@ -61,7 +61,7 @@ ahead of. Full mechanism, threat model and scope: [spec.md](spec.md).
 | [client/](client/) | ECIES order sealing, relayer, and the operational scripts (demo, sandwich, settle, pause-machines). 13 tests |
 | [web/](web/) | The trading interface; [web/README.md](web/README.md) covers running it against the local stack |
 | [media/](media/) | The explainer videos, rendered deterministically frame by frame; [media/README.md](media/README.md) explains how and why |
-| [docs/](docs/) | Finished videos, stills, the unedited demo capture and its log, and the [narrated video script](docs/video-script.md) |
+| [docs/](docs/) | Finished videos, stills, and the unedited demo capture with its log |
 
 ## Coston2 deployment
 

@@ -18,3 +18,9 @@ broadcast/
 # node --experimental-* compile cache, named by hash
 0x*/
 .playwright-mcp/
+
+# local working notes, never pushed
+CLAUDE.md
+AGENTS.md
+docs/video-script.md
+scripts-local/
