@@ -110,7 +110,10 @@ enclave restart, which is the failure mode the void mechanism exists for.
 
 - The enclave runs in FCC development mode on the operator's machine behind a
   tunnel, so sealing new orders works only while that stack is up. The page
-  says so when the proxy is unreachable; on-chain state renders regardless.
+  says so when the proxy is unreachable, and on-chain state renders
+  regardless: the settled batches, clearing prices and contract state are
+  permanently verifiable on Coston2 whether or not the enclave is running.
+  A live session can be arranged on request.
 - Simulated TEE, not real hardware attestation. The trust story is the
   registry contract flow, not a hardware root.
 - Coston2 exposes no public mempool, so the sandwich comparison executes the
