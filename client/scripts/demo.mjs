@@ -7,8 +7,11 @@
  * Everything the chain sees is a ciphertext and, at the end, a clearing price
  * and net movements. Sides, limits and sizes never leave the enclave.
  *
- * Usage: node scripts/demo.mjs
+ * Usage: vite-node scripts/demo.mjs
+ * Keys and addresses load from `.secrets/` and `spec.md` section 3 via env.mjs.
  */
+
+import "./env.mjs";
 
 import { createPublicClient, createWalletClient, http, parseAbi, parseEventLogs } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -74,7 +77,11 @@ const log = (...a) => console.log(...a);
 const fmt = (v) => (Number(v) / 1e6).toFixed(6);
 
 async function send(client, args) {
-  const hash = await client.writeContract(args);
+  // Estimate, then pad by half. The estimator has under-predicted twice on
+  // this path (FXRP's double proxy delegation on day 12, and advanceBatch at
+  // the tail of settle), and both times the shortfall burned a live run.
+  const gas = await pub.estimateContractGas({ ...args, account: client.account });
+  const hash = await client.writeContract({ ...args, gas: (gas * 3n) / 2n });
   const receipt = await pub.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`tx reverted: ${hash}`);
   return receipt;
@@ -114,8 +121,10 @@ async function main() {
     log(`   ${label} deposited ${fmt(amount)}`);
   }
 
-  await topUp(maker, FXRP, true, 3_000_000n, "maker (FXRP)");
-  await topUp(taker, USDT0, false, 4_000_000n, "taker (USDT0)");
+  // Sized to what the faucet-limited wallets can actually cover: the sell
+  // needs 1.5 FXRP of base collateral, the buy 1.62 USDT0 of quote.
+  await topUp(maker, FXRP, true, 1_500_000n, "maker (FXRP)");
+  await topUp(taker, USDT0, false, 2_000_000n, "taker (USDT0)");
 
   const before = {
     makerBase: await pub.readContract({ address: VAULT, abi: vaultAbi, functionName: "baseBalanceOf", args: [maker.account.address] }),
@@ -125,17 +134,32 @@ async function main() {
   };
 
   // --- seal and submit -----------------------------------------------------
+  // Limits straddle the live FTSO reading by 1%, so the midpoint the engine
+  // clears at lands on the feed, comfortably inside Settlement's price band.
+  // Hardcoded limits burned a run on day 12; the feed had moved out from
+  // under them and the guard rejected the price, exactly as designed.
+  const ftsoAbi = parseAbi([
+    "function getFeedById(bytes21) view returns (uint256,int8,uint64)",
+  ]);
+  const FTSO = "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d";
+  const XRP_USD = "0x015852502f55534400000000000000000000000000";
+  const [oracle] = await pub.readContract({
+    address: FTSO, abi: ftsoAbi, functionName: "getFeedById", args: [XRP_USD],
+  });
+  const sellLimit = (oracle * 99n) / 100n;
+  const buyLimit = (oracle * 101n) / 100n;
+
   log("\n2. sealed orders (the chain sees only ciphertext)");
   const sellCt = sealOrder(teePub, {
     trader: maker.account.address, batchId, side: "SELL",
-    limitPrice: 1_050_000n, size: 2_000_000n,
+    limitPrice: sellLimit, size: 1_500_000n,
   });
   const buyCt = sealOrder(teePub, {
     trader: taker.account.address, batchId, side: "BUY",
-    limitPrice: 1_080_000n, size: 2_000_000n,
+    limitPrice: buyLimit, size: 1_500_000n,
   });
-  log(`   maker SELL 2 FXRP @ 1.050000  ->  ${sellCt.slice(0, 34)}...`);
-  log(`   taker BUY  2 FXRP @ 1.080000  ->  ${buyCt.slice(0, 34)}...`);
+  log(`   maker SELL 1.5 FXRP @ ${fmt(sellLimit)}  ->  ${sellCt.slice(0, 34)}...`);
+  log(`   taker BUY  1.5 FXRP @ ${fmt(buyLimit)}  ->  ${buyCt.slice(0, 34)}...`);
 
   await send(maker, { address: BOOK, abi: bookAbi, functionName: "submitOrder", args: [sellCt], value: INSTRUCTION_FEE });
   await send(taker, { address: BOOK, abi: bookAbi, functionName: "submitOrder", args: [buyCt], value: INSTRUCTION_FEE });
