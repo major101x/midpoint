@@ -721,3 +721,67 @@ footnote at 660.
 The recording and the submission writeup. Before either, the enclave stack and
 the tunnel have to come back up and a batch has to be run through, because
 batch #5 currently shows zero orders.
+
+## Day 15, 2026-08-14: three more settled batches, the demo captured live, submission written
+
+### The stack came back up, and the zombie problem got a tool
+
+Bring-up order that works: Docker Desktop (`systemctl --user start
+docker-desktop`), ngrok on the stable domain with the traffic policy file,
+`start-services.sh --chain coston2`, then `post-build.sh` with `go` on PATH.
+The restart regenerated the enclave identity as expected and registered
+machine number three, `0x7c85ef6f5F031A243ECB74d610194375B4399ff1`.
+
+Then the accumulated zombies bit: with three machines registered and two of
+them dead, eight consecutive `getRandomTeeIds` samples returned a dead one,
+which would have pinned the next batch to a corpse and stuck it for the full
+`voidDelay`. The registry has an owner-only `pause(address)` for exactly
+this, and the operator key owns all three machines.
+`client/scripts/pause-machines.mjs` now pauses every active machine except
+the one whose key the proxy is currently serving, and refuses to act if the
+live machine is not in the active set. After pausing, the draw returns only
+the live machine.
+
+### Batches 5, 6 and 7 settled
+
+Three end-to-end runs today: 1.009450, 1.010123 and 1.010587, all inside the
+band, all conserving both assets exactly. Two failures on the way to the
+first one, both instances of failure modes already on the record:
+
+1. **The day 12 hardcoded-limits trap again.** Limits at 1.05/1.08 midpoint
+   to 1.065 against a feed reading 1.009342; the band guard rejected it,
+   exactly as designed. `demo.mjs` now derives limits from the live feed,
+   straddling it by 1%, so the midpoint the engine clears at lands on the
+   feed.
+2. **The estimator shorted `advanceBatch`.** Settle reverted OutOfGas after
+   every fill had already applied, gas used 227349 against the estimate.
+   Both demo and settle scripts now estimate and pad by half. The stranded
+   signed result was relayed with `settle.mjs <instructionId>`, which is
+   precisely the "anyone can relay" property doing its job.
+
+`demo.mjs` is now re-runnable indefinitely: it sizes the trade to what both
+collaterals can cover, treats an empty wallet with a live vault balance as
+the normal repeat-run state, and `SWAP_TRADERS=1` exchanges the wallets,
+since each settled batch moves the FXRP wholesale to the buyer.
+
+### The demo video is a recording of the real thing
+
+`media/record-demo.mjs` records the deployed page with Playwright's
+screencast while `demo.mjs` runs a real batch underneath. Batch 7 settled on
+camera. Nothing is staged: the page polls Coston2 every five seconds and the
+recording just watches the batch panel change. First take sat on the hero
+while everything happened below the fold; the script now scrolls to the
+batch panel before the action starts. Playwright wants its own ffmpeg at
+`~/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux`; a symlink to the system
+ffmpeg works.
+
+`docs/submission.mp4` is the assembled cut: the envelope story, a title
+card, then the capture at 4x. `docs/demo-run.mp4` and `docs/demo-run.log`
+are the unedited capture and its terminal log.
+
+### Submission
+
+`SUBMISSION.md` covers the spec section 10 checklist: both bounties, the
+measured comparison, target user, integration writeup, addresses, the
+built/ported/out-of-scope table, honest limitations, roadmap. Running
+totals: six batches settled, one voided, 194 tests.
